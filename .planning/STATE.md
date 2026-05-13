@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: Phase 5
-status: Phase 5 in progress
-last_updated: "2026-05-13T15:00:00.000Z"
+status: Phase 5 completed, v1.0.0 shipped
+last_updated: "2026-05-13T16:00:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 3
   completed_plans: 3
 ---
@@ -15,8 +15,8 @@ progress:
 ﻿# State
 
 **Project:** insentek-api-skills
-**Current Phase:** Phase 2
-**Status:** Phase 5 in progress
+**Current Phase:** Phase 5
+**Status:** Phase 5 completed, v1.0.0 shipped
 
 ## Project Reference
 
@@ -33,7 +33,7 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 | 2: Skill 核心文件编写 | Completed | 2026-05-13 | 2026-05-13 |
 | 3: 配套文档编写 | Completed | 2026-05-13 | 2026-05-13 |
 | 4: 示例与输出格式 | Completed | 2026-05-13 | 2026-05-13 |
-| 5: 跨平台测试与适配 | In Progress | 2026-05-13 | — |
+| 5: 跨平台测试与适配 | Completed | 2026-05-13 | 2026-05-13 |
 
 ## Active Decisions
 
