@@ -1,10 +1,10 @@
 ---
 name: insentek-openapi
-version: 1.0.0
+version: 2.0.0
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
-  历史数据、趋势分析与跨设备对比。
+  历史数据、趋势分析、跨设备对比与数据导出。
 api_base_url: http://openapi.ecois.info
 author: insentek-api-skills
 ---
@@ -16,7 +16,208 @@ author: insentek-api-skills
 
 ---
 
-## Authentication
+## 1. Intent Resolution
+
+### 1.1 意图分层模型
+
+Agent 必须按以下层次解析用户意图，**任何一层不明确时，必须向用户确认，不得擅自假设**。
+
+| 层级 | 名称 | 说明 | 缺失时的处理 |
+|------|------|------|-------------|
+| L1 | 核心意图 | 用户想做什么？查询数据 / 对比设备 / 导出文件 / 生成报告 | 反问："您想查询数据、对比设备，还是导出报告？" |
+| L2 | 输出意图 | 以什么形式呈现？对话中查看 / 生成文件 | 若 L1=查询但未明确：提供选项让用户选择 |
+| L3 | 格式意图 | 文件要什么格式？CSV / Excel / JSON / HTML | 仅在 L2=文件时询问；推荐 CSV 作为默认值 |
+
+### 1.2 意图关键词映射
+
+| 用户关键词 | 推断 L1 | 推断 L2 | 需要确认 L3？ |
+|-----------|---------|---------|--------------|
+| "查一下"、"看看"、"多少"、"怎么样" | 查询数据 | 对话展示 | 否 |
+| "导出"、"下载"、"保存"、"给我一份" | 查询数据 | 文件导出 | **是** |
+| "生成报告"、"做一份报告"、"出份报告" | 生成报告 | 文件导出 | **是** |
+| "对比"、"比较"、"哪个高" | 对比设备 | 对话展示 | 否 |
+| "把对比结果导出来" | 对比设备 | 文件导出 | **是** |
+
+### 1.3 意图不明确时的确认流程
+
+**场景 A：用户只说了"查数据"，没说要怎么看**
+
+```
+User: "查一下3号设备上个月的数据"
+Agent: "已定位到3号设备。请问您希望：
+  1. 直接在对话中查看（摘要 + 趋势分析）
+  2. 导出为 CSV 文件（适合 Excel 分析）
+  3. 导出为 Excel 文件（含统计摘要）
+  4. 生成 HTML 报告（含图表，适合分享）
+  5. 导出为 JSON 文件（适合程序处理）"
+```
+
+**场景 B：用户意图完整，直接执行**
+
+```
+User: "导出3号设备上个月数据为CSV"
+Agent: → 直接调用 export_csv 脚本
+```
+
+**场景 C：用户只说了"报告"，没说什么报告**
+
+```
+User: "给我一份报告"
+Agent: "请问您需要：
+  1. 单设备历史数据报告（选择设备和时间段）
+  2. 多设备对比报告（选择对比设备）
+  3. 实时状态概览报告"
+```
+
+### 1.4 快捷意图（一句话完整表达）
+
+以下表达被视为意图完整，无需额外确认：
+
+- "导出 [设备] [时间段] 数据为 [格式]"
+- "下载 [设备] 的 [时间段] CSV"
+- "生成 [设备] [时间段] 的 HTML 报告"
+- "把 [设备A] 和 [设备B] [时间段] 的对比结果导出为 Excel"
+
+---
+
+## 2. Query Guardrails
+
+### 2.1 硬限制规则
+
+| 限制项 | 规则值 | 说明 |
+|--------|--------|------|
+| 单次查询最大跨度 | ≤ 365 天 | 防止单次请求数据量过大导致超时 |
+| 历史数据最大回溯 | ≤ 3 年 | 从当前日期往前计算 |
+| 对话展示最大条数 | ≤ 200 条 | Agent 上下文安全 |
+| 文件导出最大条数 | ≤ 50,000 条 | 内存与生成时间安全 |
+
+### 2.2 范围验证逻辑
+
+```
+IF 用户未提供时间范围:
+  → 默认查询最近 24 小时
+
+IF 计算出的跨度 > 365 天:
+  → 拒绝查询
+  → 向用户提供拆分选项:
+    "单次查询最多支持 1 年范围。您查询的 [开始] 到 [结束] 共 N 天，超过限制。
+     建议：
+     1. 查询最近 1 年
+     2. 查询 [上一年] 的数据
+     3. 分批导出（拆分为多个文件）"
+
+IF 结束日期 < 今天 - 3年:
+  → 拒绝查询
+  → 提示最早支持日期
+
+IF 输出模式 == "对话展示" AND 数据条数 > 200:
+  → 展示统计摘要 + 首尾各 10 条抽样
+  → 提示："该时间段共 N 条数据，为您展示摘要。如需完整数据请导出文件。"
+
+IF 输出模式 == "文件导出" AND 数据条数 > 50,000:
+  → 拒绝导出
+  → 提示："数据量 N 条超过导出上限 50,000 条，建议缩小时间范围或分批导出。"
+```
+
+### 2.3 用户提示消息
+
+| 场景 | Agent 回复 |
+|------|-----------|
+| 跨度超限 | "单次查询最多支持 1 年范围。您查询的 [开始日期] 到 [结束日期] 共 N 天，超过限制。建议拆分为多次查询，或选择更近的时间段。" |
+| 历史超限 | "系统仅保留最近 3 年数据。您查询的 [日期] 超出范围，最早支持查询到 [最早日期]。" |
+| 对话展示超限 | "该时间段共有 N 条数据，为您展示统计摘要和首尾各 10 条。如需完整数据，建议导出为 CSV。" |
+| 导出超限 | "数据量较大（N 条），超过单次导出上限 50,000 条。建议缩小时间范围（如改为最近 1 个月）或分批导出。" |
+
+---
+
+## 3. Environment Prerequisites
+
+Before executing any API calls or scripts, Agent **MUST** verify the runtime environment. This prevents mid-operation failures due to missing dependencies.
+
+### 3.1 Check Trigger
+
+Run environment check in the following situations:
+
+| Situation | Action |
+|-----------|--------|
+| **First user interaction** | Run `check` once before the first API call |
+| **Before Excel export** | Re-verify `openpyxl` is installed |
+| **After script execution failure** | Run `check` to diagnose environment issues |
+
+### 3.2 Check Command
+
+```bash
+python scripts/insentek_cli.py check
+```
+
+### 3.3 Check Items
+
+| Item | Critical? | Success Criteria | Failure Action |
+|------|-----------|------------------|----------------|
+| Python >= 3.8 | **Yes** | `sys.version_info >= (3, 8)` | Inform user: "需要 Python 3.8 或更高版本" |
+| `insentek_cli.py` exists | **Yes** | File exists in `scripts/` | Inform user: "核心脚本缺失，请检查项目完整性" |
+| `export_excel.py` exists | No | File exists in `scripts/` | Warn: "Excel 导出脚本缺失" |
+| `openpyxl` installed | No | `import openpyxl` succeeds | Warn: "Excel 导出不可用，运行 `pip install openpyxl` 安装" |
+| `curl` available | No | `curl --version` succeeds | Note: "curl 作为 fallback 不可用" |
+| API reachable | No | HTTP 200/400/401 from API base | Warn: "API 服务暂时不可访问" |
+
+### 3.4 Check Output Format
+
+```json
+{
+  "success": true,
+  "all_checks_passed": true,
+  "checks": {
+    "python": {"ok": true, "version": "3.11.0", "message": "..."},
+    "scripts_cli": {"ok": true, "path": "...", "message": "..."},
+    "scripts_excel": {"ok": true, "path": "...", "message": "..."},
+    "openpyxl": {"ok": true, "version": "3.1.2", "message": "..."},
+    "curl": {"ok": true, "message": "..."},
+    "api_reachable": {"ok": true, "status": 400, "message": "..."}
+  },
+  "summary": {
+    "critical": "通过",
+    "optional": "全部通过",
+    "message": "环境检查通过，所有功能可用。"
+  }
+}
+```
+
+### 3.5 Agent Behavior After Check
+
+```
+IF critical checks fail:
+  → STOP and inform user of missing requirements
+  → Provide installation/fix instructions
+
+IF critical checks pass but optional checks fail:
+  → PROCEED with limited capability
+  → Inform user which features are unavailable and how to enable them
+  → Example: "环境已满足基本查询需求，但 Excel 导出不可用。如需导出 Excel，请运行: pip install openpyxl"
+
+IF all checks pass:
+  → PROCEED normally
+  → Optionally: "环境检查通过，所有功能就绪"
+```
+
+### 3.6 Minimal Environment Setup Guide
+
+For users setting up the skill for the first time:
+
+```bash
+# 1. Verify Python
+python --version  # >= 3.8
+
+# 2. Install optional dependency (for Excel export)
+pip install openpyxl
+
+# 3. Verify setup
+python scripts/insentek_cli.py check
+```
+
+---
+
+## 4. Authentication
 
 Before making any API calls, authenticate using the user's `appid` and `secret`:
 
@@ -27,143 +228,109 @@ Before making any API calls, authenticate using the user's `appid` and `secret`:
 
 **Security Note**: Never log or display `appid`/`secret` in conversation output.
 
+**Script-Based Authentication:**
+Agent should use the provided `insentek_cli.py` script for all API interactions:
+
+```bash
+python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
+```
+
+The script returns structured JSON:
+```json
+{
+  "success": true,
+  "token": "wj3eZGGKofgv7GyzuCmuoLukVUvUsuDq",
+  "expires": 7200
+}
+```
+
+**Token Management:**
+- Cache token for the entire conversation
+- Pass `--token` to all subsequent script calls
+- The script does NOT handle token refresh; Agent must track expiry and re-auth when needed
+
 ---
 
-## Tools
+## 5. Tools
 
-### authenticate
+### 5.1 authenticate
 
 Authenticate with the insentek API and obtain an access token.
 
 **Parameters:**
 ```json
 {
-  "appid": {
-    "type": "string",
-    "description": "在 E 生态创建的应用 ID"
-  },
-  "secret": {
-    "type": "string",
-    "description": "在 E 生态创建的应用密钥"
-  }
+  "appid": { "type": "string", "description": "在 E 生态创建的应用 ID" },
+  "secret": { "type": "string", "description": "在 E 生态创建的应用密钥" }
 }
+```
+
+**Agent Action:**
+```bash
+python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
 ```
 
 **Returns:**
 ```json
-{
-  "token": "string",
-  "expires": "integer (seconds)"
-}
+{ "token": "string", "expires": "integer (seconds)" }
 ```
-
-**Behavior:**
-- Call `GET /v3/token?appid={appid}&secret={secret}`
-- Cache token for conversation-level reuse
-- Auto-refresh when expiry is within 5 minutes or on 401/403
 
 ---
 
-### query_device
+### 5.2 query_device
 
 Query device information: list all devices, get single device detail, or resolve alias to SN.
 
 **Parameters:**
 ```json
 {
-  "page": {
-    "type": "integer",
-    "description": "页码，从 1 开始",
-    "default": 1
-  },
-  "limit": {
-    "type": "integer",
-    "description": "每页数量",
-    "default": 20
-  },
-  "sn": {
-    "type": "string",
-    "description": "设备序列号（唯一标识），与 alias 二选一"
-  },
-  "alias": {
-    "type": "string",
-    "description": "设备别名，支持部分匹配，与 sn 二选一"
-  }
+  "page": { "type": "integer", "description": "页码，从 1 开始", "default": 1 },
+  "limit": { "type": "integer", "description": "每页数量", "default": 20 },
+  "sn": { "type": "string", "description": "设备序列号，与 alias 二选一" },
+  "alias": { "type": "string", "description": "设备别名，支持部分匹配，与 sn 二选一" }
 }
+```
+
+**Agent Action:**
+```bash
+# List devices
+python scripts/insentek_cli.py devices --token ${token} --page ${page} --limit ${limit}
+
+# Device detail
+python scripts/insentek_cli.py device --token ${token} --sn ${sn}
 ```
 
 **Agent Behavior:**
-
 ```
 IF alias provided:
-  → Call GET /v3/devices?page=1&limit=100
+  → Call script devices --page 1 --limit 100
   → Find device(s) where alias contains the provided text (case-insensitive partial match)
   → IF multiple matches: ask user to specify which device
-  → ELSE: call GET /v3/device/{sn} + GET /v3/device/{sn}/description
+  → ELSE: call script device --sn {resolved_sn}
 
 ELIF sn provided:
-  → Call GET /v3/device/{sn} + GET /v3/device/{sn}/description
+  → Call script device --sn {sn}
 
 ELSE:
-  → Call GET /v3/devices?page={page}&limit={limit}
+  → Call script devices --page {page} --limit {limit}
   → Return paginated device list
 ```
 
-**Returns (list mode):**
-```json
-{
-  "count": "integer (total devices)",
-  "list": [
-    {
-      "sn": "string",
-      "alias": "string",
-      "type": "string (device type code)",
-      "series": "string",
-      "authorized": "string (own/shared)",
-      "status": { "code": "string", "description": "string" },
-      "location": { "lng": "number", "lat": "number", "province": "string", "city": "string" }
-    }
-  ]
-}
-```
-
-**Returns (detail mode):**
-Single device detail enriched with parameter descriptions from `/v3/device/{sn}/description`.
-
-**Alias Resolution Example:**
-```
-User: "查一下 3 号设备的温度"
-  → query_device(alias="3号") → sn="00000000000003"
-  → query_data(sn="00000000000003", time_expression="现在")
-```
-
-**Caching Hint:** Cache the alias→sn mapping and token→device mapping for the conversation to avoid repeated queries.
+**Caching Hint:** Cache the alias→sn mapping and device metadata for the conversation.
 
 ---
 
-### query_data
+### 5.3 query_data
 
 Query device data: real-time, historical, specific moment, or incremental sync.
 
 **Parameters:**
 ```json
 {
-  "sn": {
-    "type": "string",
-    "description": "设备序列号（必填）"
-  },
-  "time_expression": {
-    "type": "string",
-    "description": "自然语言时间描述，如'现在'、'昨天'、'最近7天'。不传则默认最近24小时。"
-  },
-  "range": {
-    "type": "string",
-    "description": "时间范围，格式 YYYYMMDD,YYYYMMDD。通常由 Agent 根据 time_expression 自动计算，无需用户填写。"
-  },
-  "includeParameters": {
-    "type": "string",
-    "description": "指定返回的参数，逗号分隔（如 moisture,temperature）。不传则返回所有参数。"
-  }
+  "sn": { "type": "string", "description": "设备序列号（必填）" },
+  "time_expression": { "type": "string", "description": "自然语言时间描述，如'现在'、'昨天'、'最近7天'。不传则默认最近24小时。" },
+  "range": { "type": "string", "description": "时间范围，格式 YYYYMMDD,YYYYMMDD。由 Agent 根据 time_expression 自动计算。" },
+  "includeParameters": { "type": "string", "description": "指定返回的参数，逗号分隔（如 moisture,temperature）。不传则返回所有参数。" }
 }
 ```
 
@@ -171,23 +338,26 @@ Query device data: real-time, historical, specific moment, or incremental sync.
 
 | Time Clue in User Query | API Endpoint | Range Calculation |
 |------------------------|--------------|-------------------|
-| "现在" / "最新" / "当前" / "实时" | `/latest` | — |
-| "昨天" | `/data` | yesterday ~ yesterday |
-| "最近7天" / "近一周" | `/data` | today-7d ~ today |
-| "上周" | `/data` | last Monday ~ last Sunday |
-| "本周" | `/data` | this Monday ~ today |
-| "本月" | `/data` | 1st ~ today |
-| "上月" | `/data` | 1st of last month ~ last day |
-| "今年" | `/data` | Jan 1 ~ today |
-| "某时刻" / "某个时间点" / "X点X分" | `/moment/{datetime}` | URL-encoded datetime |
-| "同步" / "增量" / "更新" | `/incremental` | — |
-| *(no time clue)* | `/data` (default) | last 24h |
+| "现在" / "最新" / "当前" / "实时" | `GET /v3/device/{sn}/latest` | — |
+| "昨天" | `GET /v3/device/{sn}/data` | yesterday ~ yesterday |
+| "最近7天" / "近一周" | `GET /v3/device/{sn}/data` | today-7d ~ today |
+| "上周" | `GET /v3/device/{sn}/data` | last Monday ~ last Sunday |
+| "本周" | `GET /v3/device/{sn}/data` | this Monday ~ today |
+| "本月" | `GET /v3/device/{sn}/data` | 1st ~ today |
+| "上月" | `GET /v3/device/{sn}/data` | 1st of last month ~ last day |
+| "今年" | `GET /v3/device/{sn}/data` | Jan 1 ~ today |
+| "某时刻" / "某个时间点" / "X点X分" | `GET /v3/device/{sn}/moment/{datetime}` | URL-encoded datetime |
+| "同步" / "增量" / "更新" | `GET /v3/device/{sn}/data/incremental` | — |
+| *(no time clue)* | `GET /v3/device/{sn}/data` (default) | last 24h |
 
-**Date Format:** `YYYYMMDD,YYYYMMDD` (no separators, both inclusive)
+**Agent Action (via script):**
+```bash
+# Historical data by range (with guardrails)
+python scripts/insentek_cli.py data --token ${token} --sn ${sn} --range ${range} [--include-params ${params}]
 
-**Default Behavior:** When no time clue provided, query last 24 hours.
-
-**Parameter Filtering:** When user asks for specific metrics, extract parameter codes and pass to `includeParameters`.
+# For real-time data (latest), direct API call is acceptable:
+curl -s -H "Authorization: ${token}" "http://openapi.ecois.info/v3/device/${sn}/latest"
+```
 
 **Chain Pattern:** `query_data` requires `sn`. If user provides alias, call `query_device` first to resolve.
 
@@ -211,7 +381,97 @@ Query device data: real-time, historical, specific moment, or incremental sync.
 
 ---
 
-## Time Expression Parsing Guide
+## 6. Utility Scripts
+
+当用户意图明确为"文件导出"时，调用以下脚本而非 `query_data`。
+
+**注意**："生成报告"类需求不由脚本处理，由 Agent 动态分析并生成（见 [8.3](#83-深度分析报告-agent-generated-analysis-report)）。
+
+### 6.1 export_csv
+
+导出设备历史数据为 CSV 文件（UTF-8 with BOM，兼容 Excel 中文）。
+
+**When to use:** 用户要求导出 CSV、下载数据、或需要表格文件在 Excel 中打开。
+
+**Agent Action:**
+```bash
+python scripts/insentek_cli.py export \
+  --token ${token} \
+  --sn ${sn} \
+  --range ${range} \
+  --format csv \
+  --output ${filename}.csv \
+  [--include-params ${params}]
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "total": 1000,
+  "file": "/absolute/path/to/file.csv",
+  "message": "成功导出 1000 条数据到 file.csv"
+}
+```
+
+**CSV Structure:**
+| timestamp | datetime | node | parameter | value |
+|-----------|----------|------|-----------|-------|
+| 1541169181 | 2018-11-02 22:33:01 | 10cm | moisture | 12.3 |
+
+---
+
+### 6.2 export_excel
+
+导出设备历史数据为 Excel 文件（多 sheet：原始数据 + 统计摘要）。
+
+**When to use:** 用户需要带格式的表格文件，或需要统计摘要。
+
+**Agent Action:**
+```bash
+python scripts/export_excel.py \
+  --token ${token} \
+  --sn ${sn} \
+  --range ${range} \
+  --output ${filename}.xlsx \
+  [--include-params ${params}]
+```
+
+**Output:** 同 export_csv 的 JSON 格式。
+
+**Excel Structure:**
+- Sheet 1: "原始数据" — 所有数据点
+- Sheet 2: "统计摘要" — 每参数的平均值、最小值、最大值、样本数
+
+---
+
+### 6.3 export_json
+
+导出原始 API 响应为 JSON 文件，保留嵌套结构。
+
+**When to use:** 用户是开发者，需要原始数据结构用于程序处理。
+
+**Agent Action:**
+```bash
+python scripts/insentek_cli.py export \
+  --token ${token} \
+  --sn ${sn} \
+  --range ${range} \
+  --format json \
+  --output ${filename}.json
+```
+
+---
+
+### 6.4 generate_report（HTML 报告）
+
+**DEPRECATED — 所有报告由 Agent 动态生成，不调用脚本。**
+
+当用户要求"生成报告"时，Agent 应执行 [8.3 深度分析报告](#83-深度分析报告-agent-generated-analysis-report) 流程：自行分析数据并动态构建 HTML。
+
+---
+
+## 7. Time Expression Parsing Guide
 
 Convert natural language time expressions to API parameters:
 
@@ -224,6 +484,9 @@ Convert natural language time expressions to API parameters:
 | "本月" | 1st of month | today | `20250501,20250513` |
 | "上月" | 1st of last month | last day of last month | `20250401,20250430` |
 | "今年" | Jan 1 | today | `20250101,20250513` |
+| "最近1个月" | today - 30 days | today | `20250413,20250513` |
+| "最近3个月" | today - 90 days | today | `20250212,20250513` |
+| "最近1年" | today - 365 days | today | `20240513,20250513` |
 | *(default)* | today - 1 day | today | `20250512,20250513` |
 
 **Date encoding rules:**
@@ -232,52 +495,83 @@ Convert natural language time expressions to API parameters:
 - Range format: `startYYYYMMDD,endYYYYMMDD`
 - For `/moment/{datetime}`, URL-encode as `YYYY-MM-DD HH:MM:SS`
 
----
-
-## Analysis Capabilities
-
-The skill supports analytical operations through Prompt instructions. After retrieving data, the Agent should automatically perform the following analyses when relevant:
-
-### Trend Analysis (ANALYSIS-01)
-
-When user queries historical data over multiple data points:
-
-1. **Calculate statistics** for each parameter across the time range:
-   - Average (平均值)
-   - Maximum (最大值) and timestamp
-   - Minimum (最小值) and timestamp
-   - Change rate (变化率) = (last - first) / first × 100%
-
-2. **Identify trends**:
-   - Rising (上升): values generally increasing
-   - Falling (下降): values generally decreasing
-   - Stable (平稳): values within ±10% of average
-   - Fluctuating (波动): no clear direction
-
-### Cross-Device Comparison (ANALYSIS-02)
-
-When user asks to compare multiple devices:
-
-1. Query each device's data using the same time range
-2. Present results in a side-by-side comparison table
-3. Highlight differences:
-   - Calculate absolute difference for each parameter
-   - Mark which device has higher/lower values
-   - Note any parameters present in one device but not the other
+**Range Validation:** Before every `query_data` or export script call, validate the range against [Query Guardrails](#2-query-guardrails).
 
 ---
 
-## Alert Detection Rules (ALERT-01)
+## 8. Analysis Capabilities
+
+分析能力由 Agent 的**动态推理能力**驱动，而非固定脚本模板。After retrieving data, the Agent should **understand the user's specific analytical intent** and perform flexible, context-aware analysis.
+
+### 8.1 Agent-Driven Analysis Philosophy
+
+Agent **MUST NOT** rely on hard-coded analysis templates (e.g., `generate_report.py`) for non-trivial analytical requests. Instead:
+
+1. **Parse user intent**: What exactly does the user want to know? (correlation, anomaly detection, distribution, trend, comparison, etc.)
+2. **Select appropriate methods**: Choose statistical/mathematical methods based on the question (Pearson correlation, regression, percentile analysis, rate-of-change, etc.)
+3. **Compute on-the-fly**: Use Python scripts to calculate results from the retrieved data
+4. **Synthesize insights**: Explain findings in natural language with domain context
+5. **Generate deliverables**: Produce tables, charts, or HTML reports as requested
+
+### 8.2 Common Analysis Patterns
+
+The following are **examples**, not exhaustive rules. Agent should adapt to user-specific questions.
+
+| User Question Type | Analysis Method | Example Deliverable |
+|-------------------|-----------------|---------------------|
+| "分析 X 和 Y 的关系" | Pearson/Spearman correlation, scatter plot | 相关系数 + 散点图 + 解释 |
+| "找出异常数据" | Threshold-based or statistical outlier detection | 异常列表 + 时间标记 |
+| "对比两台设备" | Side-by-side statistics + difference analysis | 对比表格 + 差异高亮 |
+| "最近有什么趋势" | Linear regression, change rate calculation | 趋势方向 + 变化率 + 图表 |
+| "降雨最多的几天" | Percentile or max-filtering on time series | 极值列表 + 日期 |
+| "数据分布如何" | Histogram, percentile analysis (P10/P50/P90) | 分布图表 + 分位数 |
+| "昼夜温差多大" | Day/night segmentation + range calculation | 昼夜统计对比表 |
+
+**Key Principle:** The analysis output should directly answer the user's question, not just dump raw statistics.
+
+### 8.3 深度分析报告 (Agent-Generated Analysis Report)
+
+当用户提出具体分析需求并要求生成报告时，Agent 按以下流程执行：
+
+```
+User: "分析这台设备温湿度的关系，生成 HTML 报告"
+  → query_device → resolve sn
+  → query_data → retrieve data
+  → Agent analyzes data (correlation, segmentation, etc.)
+  → Agent dynamically constructs HTML with ECharts visualizations
+  → Save HTML file → return path to user
+```
+
+**Report Generation Rules:**
+
+1. **No fixed templates**: Each report is custom-built based on the specific analysis requested
+2. **Use ECharts for visualizations**: Scatter plots, line charts, bar charts, heatmaps as appropriate
+3. **Include narrative insights**: Don't just show charts — explain what they mean in context
+4. **Professional styling**: Clean CSS, responsive layout, Chinese labels for all parameters
+5. **One-shot generation**: Write the complete HTML in a Python script or direct file write; do NOT create reusable template scripts in the project repo
+
+**Example Report Structure:**
+- Header: device info, location, time range, data count
+- Key Findings: summary cards with core metrics
+- Visual Analysis: interactive charts (ECharts)
+- Detailed Results: tables, statistics, comparisons
+- Conclusion: narrative explanation of what the data means
+
+**Anti-pattern:** Do NOT create `generate_report_v2.py`, `analyze_correlation.py`, etc. in the project directory. Each analysis report should be generated ad-hoc.
+
+---
+
+## 9. Alert Detection Rules (ALERT-01)
 
 After retrieving data, automatically scan for anomalies and mark them:
 
 | Parameter | Alert Condition | Severity |
 |-----------|----------------|----------|
-| `moisture` (土壤水分) | < 5% or > 50% | ⚠️ Warning |
-| `temperature` (温度) | Change > 10°C within 1 hour | 🔴 Critical |
-| `battery` (电池电压) | < 3.0V | 🔴 Critical |
-| `ec` (电导率) | < 0 or > 20 | ⚠️ Warning |
-| `laserliquidLevel` (激光液位) | < 0 | ⚠️ Warning |
+| `moisture` (土壤水分) | < 5% or > 50% | Warning |
+| `temperature` (温度) | Change > 10°C within 1 hour | Critical |
+| `battery` (电池电压) | < 3.0V | Critical |
+| `ec` (电导率) | < 0 or > 20 | Warning |
+| `laserliquidLevel` (激光液位) | < 0 | Warning |
 
 **Alert output format:**
 ```
@@ -287,11 +581,11 @@ After retrieving data, automatically scan for anomalies and mark them:
 
 ---
 
-## Output Format Guide
+## 10. Output Format Guide
 
-Use the appropriate output format based on query type:
+Use the appropriate output format based on query type and user intent:
 
-### Real-time Data → Concise Card
+### 9.1 Real-time Data → Concise Card
 ```
 📍 [设备别名] ([SN后4位])
 ─────────────────────────
@@ -302,7 +596,9 @@ Use the appropriate output format based on query type:
 状态: [状态描述]  |  位置: [城市]
 ```
 
-### Historical Data → Table + Trend Summary
+### 9.2 Historical Data (Chat) → Table + Trend Summary
+
+When data points ≤ 200:
 ```markdown
 | 时间 | [节点1-参数1] | [节点1-参数2] | ... |
 |------|--------------|--------------|-----|
@@ -312,14 +608,42 @@ Use the appropriate output format based on query type:
 - [参数名]: 平均 [值], 最高 [值]@[时间], 最低 [值]@[时间], 总体[上升/下降/平稳]
 ```
 
-### Comparison Analysis → Side-by-Side Table
+When data points > 200:
+```
+📊 数据概览（共 N 条，展示摘要）
+
+统计摘要:
+| 参数 | 平均值 | 最大值 | 最小值 | 变化率 |
+|------|--------|--------|--------|--------|
+| ...  | ...    | ...    | ...    | ...    |
+
+首尾抽样:
+| 时间 | ... |
+| ...（前10条）... |
+...
+| ...（后10条）... |
+
+💡 提示: 该时间段数据量较大，如需完整数据请说"导出为CSV"。
+```
+
+### 9.3 File Export → Confirmation with File Info
+```
+✅ 导出成功
+
+📄 文件: [filename.csv]
+📊 数据条数: [N] 条
+📅 时间范围: [开始] 至 [结束]
+📥 文件路径: [绝对路径]
+```
+
+### 9.4 Comparison Analysis → Side-by-Side Table
 ```markdown
 | 参数 | [设备A] | [设备B] | 差异 |
 |------|---------|---------|------|
 | ...  | ...     | ...     | ...  |
 ```
 
-### Alert Report → Marked List
+### 9.5 Alert Report → Marked List
 ```
 ⚠️ 检测到 N 条异常数据:
 1. [时间] [节点] [参数]: [值] — [异常原因]
@@ -328,7 +652,7 @@ Use the appropriate output format based on query type:
 
 ---
 
-## Multi-Industry Adaptation
+## 11. Multi-Industry Adaptation
 
 The skill auto-adapts based on device type. Do not assume a single industry context.
 
@@ -342,7 +666,7 @@ The skill auto-adapts based on device type. Do not assume a single industry cont
 
 ---
 
-## Interaction Flow Examples
+## 12. Interaction Flow Examples
 
 ### Flow 1: "查看我的设备列表"
 ```
@@ -361,38 +685,78 @@ User: "3号设备现在温度多少"
   → Return: latest temperature reading with timestamp
 ```
 
-### Flow 3: "查询某设备上周历史数据"
+### Flow 3: "查询某设备上周历史数据（对话展示）"
 ```
 User: "3号设备上周的土壤湿度"
   → authenticate (if needed)
   → query_device(alias="3号") → resolve sn
   → query_data(sn, time_expression="上周") → /data with range
-  → Return: historical moisture data with trend analysis
+  → data points ≤ 200 → show full table + trend analysis
 ```
 
-### Flow 4: "查询某时刻数据"
+### Flow 4: "查询某设备1个月数据（意图不明确）"
 ```
-User: "3号设备昨天中午12点的数据"
+User: "查一下3号设备1个月的数据"
   → authenticate (if needed)
   → query_device(alias="3号") → resolve sn
-  → query_data(sn, time_expression="昨天中午12点") → /moment/{datetime}
-  → Return: data at specified moment
+  → Intent Resolution: L2 (output intent) is unclear
+  → Agent asks: "请问您希望直接查看，还是导出为文件？"
+  → User: "导出为 CSV"
+  → Validate range (30 days ≤ 365 days limit) → OK
+  → export_csv(sn, range, format="csv") → return file path
 ```
 
-### Flow 5: "多设备对比"
+### Flow 5: "导出大数据量（超限处理）"
 ```
-User: "对比一下1号和2号设备的温度"
+User: "导出3号设备最近2年的数据"
+  → authenticate (if needed)
+  → query_device(alias="3号") → resolve sn
+  → Calculate range: 730 days
+  → Query Guardrails: 730 > 365 → REJECT
+  → Agent replies: "单次查询最多支持1年范围。您查询的共730天，超过限制。
+      建议：1. 查询最近1年  2. 查询前1年  3. 分批导出（2个文件）"
+  → User: "分批导出"
+  → export_csv(sn, range="20240513,20250513", output="data_2024-2025.csv")
+  → export_csv(sn, range="20230513,20240512", output="data_2023-2024.csv")
+```
+
+### Flow 6: "生成报告"
+
+```
+User: "给3号设备生成一份上周的报告"
+  → authenticate (if needed)
+  → query_device(alias="3号") → resolve sn
+  → query_data(sn, range) → retrieve data
+  → Agent analyzes data (statistics, trends, anomalies)
+  → Agent dynamically constructs HTML report with ECharts visualizations
+  → Save HTML file → 返回报告路径
+
+User: "分析3号设备温湿度的关系，生成 HTML 报告"
+  → authenticate (if needed)
+  → query_device(alias="3号") → resolve sn
+  → query_data(sn, range) → retrieve data
+  → Agent analyzes: Pearson correlation, day/night segmentation, etc.
+  → Agent dynamically constructs HTML with scatter plot + trend chart
+  → Save HTML file → 返回报告路径
+```
+
+**注意**：两种场景均由 Agent 动态分析并生成报告，不调用任何脚本模板。
+
+### Flow 7: "多设备对比导出"
+```
+User: "把1号和2号设备最近一周的温度对比导出为Excel"
   → authenticate (if needed)
   → query_device(alias="1号") → sn1
   → query_device(alias="2号") → sn2
-  → query_data(sn1, time_expression="现在")
-  → query_data(sn2, time_expression="现在")
-  → Return: comparison table with difference highlighting
+  → query_data(sn1, range) + query_data(sn2, range)
+  → export_excel (combined data) OR present comparison table in chat then ask if export needed
 ```
 
 ---
 
-## Error Handling
+## 13. Error Handling
+
+### 12.1 HTTP Status Codes
 
 | HTTP Status | Meaning | Skill Action |
 |-------------|---------|-------------|
@@ -403,14 +767,27 @@ User: "对比一下1号和2号设备的温度"
 | 404 | Not found | Device SN may be invalid; verify with user |
 | 500 | Server error | Retry up to 3 times with exponential backoff |
 
-**User-facing error messages:**
-- 401 → "认证失败，请检查 appid 和 secret 是否正确"
-- 404 → "未找到该设备，请确认设备序列号或别名"
-- 500 (after retries) → "服务器暂时不可用，请稍后重试"
+### 12.2 Script Error Handling
+
+When a script returns `"success": false`, Agent should:
+1. Parse the `error` field
+2. If error contains "时间范围" or "超过限制" → explain guardrail to user and offer alternatives
+3. If error contains "认证" or "token" → re-authenticate and retry
+4. Otherwise → show user-friendly error message
+
+### 12.3 User-Facing Error Messages
+
+| Scenario | Message |
+|---------|---------|
+| 401 | "认证失败，请检查 appid 和 secret 是否正确" |
+| 404 | "未找到该设备，请确认设备序列号或别名" |
+| 500 (after retries) | "服务器暂时不可用，请稍后重试" |
+| Range validation fail | 见 [Query Guardrails](#2-query-guardrails) |
+| Export limit exceeded | "数据量较大（N 条），超过导出上限 50,000 条。建议缩小时间范围或分批导出。" |
 
 ---
 
-## Device Status Code Reference
+## 14. Device Status Code Reference
 
 | Code | Description | Applicable Device Types |
 |------|-------------|------------------------|
@@ -426,7 +803,7 @@ User: "对比一下1号和2号设备的温度"
 
 ---
 
-## Parameter Quick Reference
+## 15. Parameter Quick Reference
 
 ### Z — Soil / 土壤监测
 | Code | Name | Unit |
@@ -473,3 +850,4 @@ User: "对比一下1号和2号设备的温度"
 - **Token reuse**: Cache token for the entire conversation; do not request a new token for every API call.
 - **Alias matching**: Use case-insensitive partial match on `alias` field from `/v3/devices`.
 - **Parameter names**: Always prefer Chinese names from `/description` endpoint when displaying to users.
+- **Script-first**: Agent should prefer calling `scripts/insentek_cli.py` over raw `curl` for all operations. Use `curl` only for `/latest` real-time queries or when scripts are unavailable.
