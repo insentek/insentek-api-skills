@@ -219,6 +219,7 @@ def export_excel(token, sn, range_str, output_path, include_params=None):
 
 
 def main():
+    global API_BASE_URL
     parser = argparse.ArgumentParser(description="Insentek Excel Export")
     parser.add_argument("--token", required=True)
     parser.add_argument("--sn", required=True)
@@ -228,7 +229,6 @@ def main():
     parser.add_argument("--api-base", default=API_BASE_URL)
     args = parser.parse_args()
 
-    global API_BASE_URL
     API_BASE_URL = args.api_base
 
     export_excel(args.token, args.sn, args.range, args.output, args.include_params)

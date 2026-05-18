@@ -140,9 +140,10 @@ Run environment check in the following situations:
 
 | Situation | Action |
 |-----------|--------|
-| **First user interaction** | Run `check` once before the first API call |
+| **First user interaction** | Run `check` once before the first API call; then check authentication state (see [4.1 Authentication Flow](#41-认证决策流程每会话一次)) |
 | **Before Excel export** | Re-verify `openpyxl` is installed |
 | **After script execution failure** | Run `check` to diagnose environment issues |
+| **Token expired and re-auth failed** | Clear cached credentials and prompt user to re-enter |
 
 ### 3.2 Check Command
 
@@ -219,35 +220,100 @@ python scripts/insentek_cli.py check
 
 ## 4. Authentication
 
-Before making any API calls, authenticate using the user's `appid` and `secret`:
+### 4.1 认证决策流程（每会话一次）
 
-1. Call `GET /v3/token?appid={appid}&secret={secret}`
-2. Cache the returned `token` and calculate `expires_at = now + expires_seconds`
-3. Include `Authorization: {token}` header in all subsequent requests
-4. When a call returns 401/403, or when token expires within 5 minutes, automatically re-authenticate
+Agent 必须在**会话内存中**维护以下状态（不要写入文件）：
 
-**Security Note**: Never log or display `appid`/`secret` in conversation output.
+| 状态项 | 说明 |
+|--------|------|
+| `cached_appid` | 用户提供的 appid |
+| `cached_secret` | 用户提供的 secret（**绝不输出到对话**） |
+| `cached_token` | 当前有效的 access token |
+| `token_expires_at` | token 过期时间戳（秒级 Unix timestamp） |
 
-**Script-Based Authentication:**
-Agent should use the provided `insentek_cli.py` script for all API interactions:
+每次用户发起需要 API 调用的请求时，按以下优先级执行：
 
+```
+IF cached_token 存在 AND token_expires_at - now > 300 秒:
+  → 使用 cached_token，直接执行 API 调用（无需任何交互）
+
+ELIF cached_token 存在 AND token_expires_at - now <= 300 秒:
+  → 自动刷新：用 cached_appid + cached_secret 重新获取 token
+  → 更新 cached_token 和 token_expires_at
+  → 执行 API 调用（用户无感知）
+
+ELIF cached_appid 和 cached_secret 存在但 token 缺失/失效:
+  → 用缓存的凭据获取 token
+  → 执行 API 调用
+
+ELSE:
+  → 向用户询问 appid 和 secret
+  → 获取后缓存到会话内存
+  → 获取 token
+  → 执行 API 调用
+```
+
+**核心原则：一个会话内，用户只需提供一次认证信息。**
+
+### 4.2 首次使用引导
+
+```
+User: "查看我的设备"
+
+Agent: （检测到无认证缓存）
+  "请先提供您的 insentek 应用认证信息：
+   appid 和 secret（可在 E 生态后台获取）"
+
+User: "appid 是 xxx，secret 是 yyy"
+
+Agent: authenticate → 缓存 appid/secret/token → query_device → 返回结果
+```
+
+### 4.3 后续使用（同一会话）
+
+```
+User: "1号大棚现在的温度"
+
+Agent: （检测到 cached_token 有效）
+  → 直接使用缓存的 token 调用 API
+  → 返回结果（不再询问认证信息）
+
+User: "再查一下湿度"
+
+Agent: （token 仍有效）
+  → 继续使用缓存的 token
+  → 返回结果
+```
+
+### 4.4 脚本调用方式
+
+**获取 token（首次或显式提供时）：**
 ```bash
 python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
 ```
 
-The script returns structured JSON:
-```json
-{
-  "success": true,
-  "token": "wj3eZGGKofgv7GyzuCmuoLukVUvUsuDq",
-  "expires": 7200
-}
+**所有后续调用（使用缓存的 token）：**
+```bash
+python scripts/insentek_cli.py devices --token ${cached_token} ...
+python scripts/insentek_cli.py data --token ${cached_token} ...
 ```
 
-**Token Management:**
-- Cache token for the entire conversation
-- Pass `--token` to all subsequent script calls
-- The script does NOT handle token refresh; Agent must track expiry and re-auth when needed
+### 4.5 安全规范
+
+- **Never log or display `appid`/`secret`** in conversation output
+- **Never write appid/secret to disk** (session memory only)
+- Token 可以显示（它已经是对外使用的凭证），但 secret 绝对不行
+- 如果 token 过期且重新认证失败（如 secret 已变更），清除所有缓存并回到询问流程
+
+### 4.6 Token 生命周期
+
+| 阶段 | 行为 |
+|------|------|
+| 获取 | `expires` 通常为 7200 秒（2 小时） |
+| 缓存 | 存入会话内存，后续所有调用复用 |
+| 刷新阈值 | 过期前 5 分钟（300 秒）自动刷新 |
+| 失效处理 | 401/403 时自动用缓存凭据重新认证 |
+| 会话结束 | 所有缓存自动清除（不持久化） |
 
 ---
 
@@ -255,7 +321,16 @@ The script returns structured JSON:
 
 ### 5.1 authenticate
 
-Authenticate with the insentek API and obtain an access token.
+Explicitly authenticate with the insentek API using user-provided credentials.
+
+**When to use:**
+- User explicitly provides appid/secret (first time in session)
+- Cached credentials failed and user needs to re-enter
+- User wants to switch to a different account
+
+**When NOT to use:**
+- Session already has valid cached token → reuse cached token directly
+- Token expired but cached appid/secret available → auto re-auth silently
 
 **Parameters:**
 ```json
@@ -269,6 +344,11 @@ Authenticate with the insentek API and obtain an access token.
 ```bash
 python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
 ```
+
+**After Success:**
+1. Cache `appid`, `secret`, `token`, and `expires_at` in session memory
+2. Use cached token for all subsequent API calls
+3. Never ask for credentials again in this session unless re-auth fails
 
 **Returns:**
 ```json
@@ -549,6 +629,7 @@ User: "分析这台设备温湿度的关系，生成 HTML 报告"
 3. **Include narrative insights**: Don't just show charts — explain what they mean in context
 4. **Professional styling**: Clean CSS, responsive layout, Chinese labels for all parameters
 5. **One-shot generation**: Write the complete HTML in a Python script or direct file write; do NOT create reusable template scripts in the project repo
+6. **Cleanup temporary scripts**: Any temporary Python scripts created solely for report generation MUST be deleted immediately after the report is generated. Only the final deliverable (HTML/CSV/Excel) should remain
 
 **Example Report Structure:**
 - Header: device info, location, time range, data count
@@ -585,7 +666,7 @@ After retrieving data, automatically scan for anomalies and mark them:
 
 Use the appropriate output format based on query type and user intent:
 
-### 9.1 Real-time Data → Concise Card
+### 10.1 Real-time Data → Concise Card
 ```
 📍 [设备别名] ([SN后4位])
 ─────────────────────────
@@ -596,7 +677,7 @@ Use the appropriate output format based on query type and user intent:
 状态: [状态描述]  |  位置: [城市]
 ```
 
-### 9.2 Historical Data (Chat) → Table + Trend Summary
+### 10.2 Historical Data (Chat) → Table + Trend Summary
 
 When data points ≤ 200:
 ```markdown
@@ -626,7 +707,7 @@ When data points > 200:
 💡 提示: 该时间段数据量较大，如需完整数据请说"导出为CSV"。
 ```
 
-### 9.3 File Export → Confirmation with File Info
+### 10.3 File Export → Confirmation with File Info
 ```
 ✅ 导出成功
 
@@ -636,14 +717,14 @@ When data points > 200:
 📥 文件路径: [绝对路径]
 ```
 
-### 9.4 Comparison Analysis → Side-by-Side Table
+### 10.4 Comparison Analysis → Side-by-Side Table
 ```markdown
 | 参数 | [设备A] | [设备B] | 差异 |
 |------|---------|---------|------|
 | ...  | ...     | ...     | ...  |
 ```
 
-### 9.5 Alert Report → Marked List
+### 10.5 Alert Report → Marked List
 ```
 ⚠️ 检测到 N 条异常数据:
 1. [时间] [节点] [参数]: [值] — [异常原因]
@@ -671,7 +752,7 @@ The skill auto-adapts based on device type. Do not assume a single industry cont
 ### Flow 1: "查看我的设备列表"
 ```
 User: "查看我的设备"
-  → authenticate (if token not cached)
+  → check auth state → authenticate only if no cached token
   → query_device (no sn/alias → list)
   → Return: paginated device list with status and location
 ```
@@ -679,7 +760,7 @@ User: "查看我的设备"
 ### Flow 2: "查询某设备最新数据"
 ```
 User: "3号设备现在温度多少"
-  → authenticate (if needed)
+  → check auth state → authenticate only if no cached token
   → query_device(alias="3号") → resolve sn
   → query_data(sn, time_expression="现在") → /latest
   → Return: latest temperature reading with timestamp
@@ -688,7 +769,7 @@ User: "3号设备现在温度多少"
 ### Flow 3: "查询某设备上周历史数据（对话展示）"
 ```
 User: "3号设备上周的土壤湿度"
-  → authenticate (if needed)
+  → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → query_data(sn, time_expression="上周") → /data with range
   → data points ≤ 200 → show full table + trend analysis
@@ -697,7 +778,7 @@ User: "3号设备上周的土壤湿度"
 ### Flow 4: "查询某设备1个月数据（意图不明确）"
 ```
 User: "查一下3号设备1个月的数据"
-  → authenticate (if needed)
+  → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → Intent Resolution: L2 (output intent) is unclear
   → Agent asks: "请问您希望直接查看，还是导出为文件？"
@@ -709,7 +790,7 @@ User: "查一下3号设备1个月的数据"
 ### Flow 5: "导出大数据量（超限处理）"
 ```
 User: "导出3号设备最近2年的数据"
-  → authenticate (if needed)
+  → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → Calculate range: 730 days
   → Query Guardrails: 730 > 365 → REJECT
@@ -724,7 +805,7 @@ User: "导出3号设备最近2年的数据"
 
 ```
 User: "给3号设备生成一份上周的报告"
-  → authenticate (if needed)
+  → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → query_data(sn, range) → retrieve data
   → Agent analyzes data (statistics, trends, anomalies)
@@ -732,7 +813,7 @@ User: "给3号设备生成一份上周的报告"
   → Save HTML file → 返回报告路径
 
 User: "分析3号设备温湿度的关系，生成 HTML 报告"
-  → authenticate (if needed)
+  → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → query_data(sn, range) → retrieve data
   → Agent analyzes: Pearson correlation, day/night segmentation, etc.
@@ -745,7 +826,7 @@ User: "分析3号设备温湿度的关系，生成 HTML 报告"
 ### Flow 7: "多设备对比导出"
 ```
 User: "把1号和2号设备最近一周的温度对比导出为Excel"
-  → authenticate (if needed)
+  → check auth state → authenticate if needed
   → query_device(alias="1号") → sn1
   → query_device(alias="2号") → sn2
   → query_data(sn1, range) + query_data(sn2, range)
@@ -756,7 +837,7 @@ User: "把1号和2号设备最近一周的温度对比导出为Excel"
 
 ## 13. Error Handling
 
-### 12.1 HTTP Status Codes
+### 13.1 HTTP Status Codes
 
 | HTTP Status | Meaning | Skill Action |
 |-------------|---------|-------------|
@@ -767,7 +848,7 @@ User: "把1号和2号设备最近一周的温度对比导出为Excel"
 | 404 | Not found | Device SN may be invalid; verify with user |
 | 500 | Server error | Retry up to 3 times with exponential backoff |
 
-### 12.2 Script Error Handling
+### 13.2 Script Error Handling
 
 When a script returns `"success": false`, Agent should:
 1. Parse the `error` field
@@ -775,7 +856,7 @@ When a script returns `"success": false`, Agent should:
 3. If error contains "认证" or "token" → re-authenticate and retry
 4. Otherwise → show user-friendly error message
 
-### 12.3 User-Facing Error Messages
+### 13.3 User-Facing Error Messages
 
 | Scenario | Message |
 |---------|---------|

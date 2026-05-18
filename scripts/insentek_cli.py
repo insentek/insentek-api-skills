@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import csv
+import html
 import json
 import os
 import platform
@@ -362,8 +363,8 @@ tr:nth-child(even) {{ background: #fafafa; }}
 <body>
 <h1>设备数据报告</h1>
 <div class="info">
-  <p><strong>设备 SN:</strong> {sn}</p>
-  <p><strong>时间范围:</strong> {range_str}</p>
+  <p><strong>设备 SN:</strong> {html.escape(sn)}</p>
+  <p><strong>时间范围:</strong> {html.escape(range_str)}</p>
   <p><strong>数据条数:</strong> {total}</p>
   <p><strong>时间点数:</strong> {len(pivot_rows)}</p>
   <p><strong>生成时间:</strong> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</p>
@@ -592,7 +593,7 @@ def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, 
             "series": series
         }
 
-    option_json = json.dumps(option, ensure_ascii=False)
+    option_json = json.dumps(option, ensure_ascii=False).replace("</script", r"<\/script")
 
     # Data table
     all_params = set()
@@ -633,7 +634,7 @@ def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, 
     html = (
         '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        '<title>' + (title or "数据分析图表") + '</title>\n'
+        '<title>' + html.escape(title or "数据分析图表") + '</title>\n'
         '<script src="' + echarts_rel + '"></script>\n'
         '<style>\n'
         '* { margin: 0; padding: 0; box-sizing: border-box; }\n'
@@ -663,13 +664,13 @@ def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, 
         '</style>\n</head>\n<body>\n'
         '<div class="container">\n'
         '    <div class="header">\n'
-        '        <h1>' + (title or "数据分析图表") + '</h1>\n'
+        '        <h1>' + html.escape(title or "数据分析图表") + '</h1>\n'
         '        <div class="meta">\n'
-        '            <span>设备: ' + (alias or sn) + '</span>\n'
-        '            <span>SN: ' + sn + '</span>\n'
-        '            <span>类型: ' + device_type + '</span>\n'
-        '            <span>位置: ' + province + ' ' + city + '</span>\n'
-        '            <span>时间: ' + range_str + '</span>\n'
+        '            <span>设备: ' + html.escape(alias or sn) + '</span>\n'
+        '            <span>SN: ' + html.escape(sn) + '</span>\n'
+        '            <span>类型: ' + html.escape(device_type) + '</span>\n'
+        '            <span>位置: ' + html.escape(province) + ' ' + html.escape(city) + '</span>\n'
+        '            <span>时间: ' + html.escape(range_str) + '</span>\n'
         '        </div>\n'
         '    </div>\n'
         '    <div class="card">\n'
@@ -678,7 +679,7 @@ def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, 
         '    </div>\n'
         '    <div class="card">\n'
         '        <h2>分析结论</h2>\n'
-        '        <div class="conclusion">' + (conclusion or "暂无分析结论。") + '</div>\n'
+        '        <div class="conclusion">' + html.escape(conclusion or "暂无分析结论。") + '</div>\n'
         '    </div>\n'
         '    <div class="card">\n'
         '        <h2>原始数据</h2>\n'
