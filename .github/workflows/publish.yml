@@ -36,25 +36,75 @@ jobs:
             --version "$VERSION" \
             --changelog "$RELEASE_BODY"
 
-      # === 新增：带有 Changelog 的钉钉通知步骤 ===
+      # === 钉钉群机器人通知（加签方式）===
       - name: Notify DingTalk
-        if: always() 
-        uses: ModulesMarv/dingtalk-action@v1
-        with:
-          # 在 GitHub 仓库 Secrets 中配置的钉钉 Token 和 加签密钥
-          token: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
-          secret: ${{ secrets.DINGTALK_SECRET }}
-          status: ${{ job.status }}
-          notifyType: async
-          title: "ClawHub 部署结果通知"
-          # text 内部支持标准的 Markdown 语法
-          text: |
-            ### ClawHub 部署状态: ${{ job.status == 'success' && '🟢 成功' || '🔴 失败' }}
-            - **项目名称**: insentek-api-skill
-            - **版本号**: ${{ github.event.release.tag_name }}
-            - **触发人**: ${{ github.actor }}
-            - **构建详情**: [点击查看 GitHub Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            
-            ---
-            ### 📝 更新日志 (Changelog):
-            ${{ github.event.release.body }}
+        if: always()
+        env:
+          DING_TOKEN: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
+          DING_SECRET: ${{ secrets.DINGTALK_SECRET }}
+        run: |
+          TIMESTAMP=$(date +%s%3N)
+
+          # 计算加签（HMAC-SHA256 + Base64 + URL Encode）
+          if [ -n "$DING_SECRET" ]; then
+            SIGN=$(printf '%s' "${TIMESTAMP}\n${DING_SECRET}" | openssl dgst -sha256 -hmac "$DING_SECRET" -binary | base64)
+            SIGN_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$SIGN'''))")
+            WEBHOOK="https://oapi.dingtalk.com/robot/send?access_token=${DING_TOKEN}&timestamp=${TIMESTAMP}&sign=${SIGN_ENC}"
+          else
+            WEBHOOK="https://oapi.dingtalk.com/robot/send?access_token=${DING_TOKEN}"
+          fi
+
+          STATUS_EMOJI='🔴 失败'
+          [ "${{ job.status }}" = "success" ] && STATUS_EMOJI='🟢 成功'
+
+          # 处理 Changelog：为空时兜底，不为空时放入折叠块避免消息过长
+          CHANGELOG='${{ github.event.release.body }}'
+          if [ -z "$CHANGELOG" ]; then
+            CHANGELOG_MD='_无更新日志_'
+          else
+            # 转义 JSON 中的特殊字符
+            CHANGELOG_ESC=$(echo "$CHANGELOG" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()), end="")')
+            CHANGELOG_MD="<details><summary>📝 点击查看更新日志</summary>\n\n${CHANGELOG_ESC}\n\n</details>"
+          fi
+
+          # 构造并发送 Markdown 消息
+          python3 -c "
+          import json, urllib.request
+
+          status = '${{ job.status }}'
+          status_emoji = '${STATUS_EMOJI}'
+          tag = '${{ github.event.release.tag_name }}'
+          actor = '${{ github.actor }}'
+          run_url = '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'
+          changelog_md = '''${CHANGELOG_MD}'''
+
+          body = {
+            'msgtype': 'markdown',
+            'markdown': {
+              'title': 'ClawHub 部署结果通知',
+              'text': f'''### ClawHub 部署结果通知：{status_emoji}
+          - **项目名称**: insentek-api-skill
+          - **版本号**: {tag}
+          - **触发人**: {actor}
+          - **构建详情**: [点击查看 GitHub Action]({run_url})
+
+          ---
+          {changelog_md}'''
+            }
+          }
+
+          req = urllib.request.Request(
+            '${WEBHOOK}',
+            data=json.dumps(body, ensure_ascii=False).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+          )
+
+          try:
+            with urllib.request.urlopen(req) as resp:
+              print(resp.read().decode('utf-8'))
+          except urllib.error.HTTPError as e:
+            print(f'DingTalk notify failed: {e.code} {e.reason}')
+            print(e.read().decode('utf-8'))
+            exit(1)
+          "
