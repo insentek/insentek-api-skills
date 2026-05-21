@@ -35,3 +35,26 @@ jobs:
             --name "insentek-api-skill" \
             --version "$VERSION" \
             --changelog "$RELEASE_BODY"
+
+      # === 新增：带有 Changelog 的钉钉通知步骤 ===
+      - name: Notify DingTalk
+        if: always() 
+        uses: ModulesMarv/dingtalk-action@v1
+        with:
+          # 在 GitHub 仓库 Secrets 中配置的钉钉 Token 和 加签密钥
+          token: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
+          secret: ${{ secrets.DINGTALK_SECRET }}
+          status: ${{ job.status }}
+          notifyType: async
+          title: "ClawHub 部署结果通知"
+          # text 内部支持标准的 Markdown 语法
+          text: |
+            ### ClawHub 部署状态: ${{ job.status == 'success' && '🟢 成功' || '🔴 失败' }}
+            - **项目名称**: insentek-api-skill
+            - **版本号**: ${{ github.event.release.tag_name }}
+            - **触发人**: ${{ github.actor }}
+            - **构建详情**: [点击查看 GitHub Action](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ---
+            ### 📝 更新日志 (Changelog):
+            ${{ github.event.release.body }}
