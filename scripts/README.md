@@ -13,7 +13,8 @@
 
 | 脚本 | 功能 | 依赖 |
 |------|------|------|
-| `insentek_cli.py` | 统一 CLI：认证、设备查询、数据查询、CSV/JSON/HTML 导出 | Python 3.8+ |
+| `insentek_cli.py` | 统一 CLI：认证、设备查询、数据查询、CSV/JSON 导出 | Python 3.8+ |
+| `write_html.py` | HTML 文件写入：将 AI 生成的 HTML 内容安全落盘 | Python 3.8+ |
 | `export_excel.py` | Excel 导出（多 sheet：原始数据 + 统计摘要） | Python 3.8+, openpyxl |
 
 ## 使用示例
@@ -32,6 +33,7 @@ python insentek_cli.py check
     "python": {"ok": true, "version": "3.11.0", "message": "Python 3.11.0 满足要求 (>=3.8)"},
     "scripts_cli": {"ok": true, "path": "...", "message": "核心脚本 insentek_cli.py 已找到"},
     "scripts_excel": {"ok": true, "path": "...", "message": "Excel 脚本 export_excel.py 已找到"},
+    "scripts_write_html": {"ok": true, "path": "...", "message": "HTML 写入脚本 write_html.py 已找到"},
     "openpyxl": {"ok": true, "version": "3.1.2", "message": "openpyxl 3.1.2 已安装，Excel 导出可用"},
     "curl": {"ok": true, "message": "curl 可用，可作为脚本不可用时的 fallback"},
     "api_reachable": {"ok": true, "status": 400, "message": "API 服务可访问（HTTP 400，未提供认证参数）"}
@@ -69,9 +71,9 @@ python insentek_cli.py export --token YOUR_TOKEN --sn 00000000000000 --range 202
 python export_excel.py --token YOUR_TOKEN --sn 00000000000000 --range 20250101,20250131 --output data.xlsx
 ```
 
-### 生成 HTML 报告
+### 写入 HTML 报告（AI 动态生成内容后落盘）
 ```bash
-python insentek_cli.py report --token YOUR_TOKEN --sn 00000000000000 --range 20250101,20250131 --output report.html
+python write_html.py --content "<html>...</html>" --output report.html
 ```
 
 ## 输出格式
