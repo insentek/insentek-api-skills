@@ -1,6 +1,6 @@
 ---
 name: insentek-openapi
-version: 1.0.1
+version: 1.0.2
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
@@ -183,6 +183,7 @@ python scripts/insentek_cli.py check
 | Python >= 3.8 | **Yes** | `sys.version_info >= (3, 8)` | Inform user: "需要 Python 3.8 或更高版本" |
 | `insentek_cli.py` exists | **Yes** | File exists in `scripts/` | Inform user: "核心脚本缺失，请检查项目完整性" |
 | `export_excel.py` exists | No | File exists in `scripts/` | Warn: "Excel 导出脚本缺失" |
+| `write_html.py` exists | No | File exists in `scripts/` | Warn: "HTML 写入脚本缺失，报告生成功能不可用" |
 | `openpyxl` installed | No | `import openpyxl` succeeds | Warn: "Excel 导出不可用，运行 `pip install openpyxl` 安装" |
 | `curl` available | No | `curl --version` succeeds | Note: "curl 作为 fallback 不可用" |
 | API reachable | No | HTTP 200/400/401 from API base | Warn: "API 服务暂时不可访问" |
@@ -605,11 +606,36 @@ python scripts/insentek_cli.py export \
 
 ---
 
-### 6.4 generate_report（HTML 报告）
+### 6.4 write_html
 
-**DEPRECATED — 所有报告由 Agent 动态生成，不调用脚本。**
+将 AI 动态生成的 HTML 内容写入文件。本脚本不渲染模板、不处理数据，仅负责安全落盘。
 
-当用户要求"生成报告"时，Agent 应执行 [8.3 深度分析报告](#83-深度分析报告-agent-generated-analysis-report) 流程：自行分析数据并动态构建 HTML。
+**When to use:** Agent 已完成数据分析并动态构建了 HTML 内容，需要将结果保存为文件交付给用户。
+
+**Agent Action:**
+```bash
+python scripts/write_html.py \
+  --content "${html_content}" \
+  --output ${filename}.html
+```
+
+**从 stdin 读取（适合大段内容）：**
+```bash
+echo "${html_content}" | python scripts/write_html.py --output ${filename}.html
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "file": "/absolute/path/to/report.html",
+  "size": 15234,
+  "message": "成功写入 HTML 文件: report.html (15234 bytes)",
+  "warnings": []
+}
+```
+
+**Validation:** 脚本会检查基本 HTML 结构（缺失标签等），但仅作为警告输出，不阻止写入。Agent 应确保生成的 HTML 是完整有效的。
 
 ---
 
@@ -994,5 +1020,6 @@ When a script returns `"success": false`, Agent should:
 - **Alias matching**: Use case-insensitive partial match on `alias` field from `/v3/devices`.
 - **Parameter names**: Always prefer Chinese names from `/description` endpoint when displaying to users.
 - **Script-first**: Agent should prefer calling `scripts/insentek_cli.py` over raw `curl` for all operations. Use `curl` only for `/latest` real-time queries or when scripts are unavailable.
-- **Dry-run first**: When debugging or previewing data, always append `--dry-run` to `data`, `export`, `report`, or `chart` commands. Never output raw full sensor data to conversation.
+- **Dry-run first**: When debugging or previewing data, always append `--dry-run` to `data` or `export` commands. Never output raw full sensor data to conversation.
 - **Raw data prohibition**: Full sensor data must only be delivered via file export (CSV/Excel/JSON), never dumped into chat context.
+- **Fallback reference**: This skill covers all common scenarios. Only consult `reference/api-doc.md` (original OpenAPI v3.1.9) if you encounter an edge case not addressed here — do not routinely read it.

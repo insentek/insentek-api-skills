@@ -50,8 +50,9 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 - 文件导出上限：50,000 条（超限拒绝并建议缩小范围）
 
 ### Utility Scripts（实用脚本）
-- `scripts/insentek_cli.py` — 统一 CLI（认证、设备查询、数据查询、CSV/JSON/HTML 导出、环境检查）
+- `scripts/insentek_cli.py` — 统一 CLI（认证、设备查询、数据查询、CSV/JSON 导出、环境检查）
 - `scripts/export_excel.py` — Excel 导出（多 sheet：原始数据 + 统计摘要）
+- `scripts/write_html.py` — HTML 文件写入工具（AI 动态生成内容的安全落盘）
 - 脚本内置边界检查，结构化 JSON 输出
 
 ### Environment Prerequisites（环境前置检查）
