@@ -21,18 +21,16 @@
 
 登录 [E 生态](https://www.ecois.info)，在「应用管理」中创建应用，获取 `appid` 和 `secret`。
 
-### 2. 加载 Skill
+### 2. 安装 Skill
 
-将 [`skill.md`](skill.md) 加载到你的 Agent 平台：
+| 平台 | 安装方式 | 卸载 |
+|------|---------|------|
+| **OpenClaw** | `clawhub skill install insentek-api-skill` | `clawhub skill remove insentek-api-skill` |
+| **Claude Code** | 项目根目录放 `skill.md` 或 `/load skill.md` | 删除文件或 `/clear` |
+| **ChatGPT** | GPTs Instructions 粘贴 / Actions Schema 导入 | Delete GPT / 删除 Action |
+| **Hermes-Agent** | `~/.hermes/skills/` 目录下放 skill 文件 | `rm` 文件后 `reload` |
 
-| 平台 | 方式 |
-|------|------|
-| **Claude Code** | 将 `skill.md` 放入项目根目录 |
-| **OpenClaw** | Skills 页面 → Import Skill → 选择文件 |
-| **ChatGPT** | 创建 GPT → 粘贴 Instructions，或使用 Actions |
-| **Hermes-Agent** | 导入技能包 |
-
-详细步骤见 [`docs/platform-setup.md`](docs/platform-setup.md)。
+> 各平台分操作系统（Windows / macOS / Linux）的详细安装路径、ClawHub 安装命令、卸载步骤见 [`docs/platform-setup.md`](docs/platform-setup.md)。
 
 ### 3. 开始对话
 

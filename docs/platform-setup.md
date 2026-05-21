@@ -1,6 +1,6 @@
 # Platform Setup Guide — 各 Agent 平台配置指南
 
-> 将 insentek skill 加载到不同 Agent 平台的具体步骤。
+> 将 insentek skill 安装到不同 Agent 平台的完整步骤，含安装路径、卸载方法和故障排查。
 
 ---
 
@@ -10,21 +10,57 @@
 - [Claude Code](#claude-code)
 - [ChatGPT](#chatgpt)
 - [Hermes-Agent](#hermes-agent)
+- [平台兼容性速查](#平台兼容性速查)
+- [故障排查](#故障排查)
 
 ---
 
 ## OpenClaw
 
-### 步骤
+### 安装
+
+#### 方式一：从 ClawHub 安装（推荐）
+
+```bash
+# 安装最新版本
+clawhub skill install insentek-api-skill
+
+# 安装指定版本
+clawhub skill install insentek-api-skill@1.0.2
+
+# 从 ClawHub 搜索确认
+clawhub skill search insentek
+```
+
+安装完成后，skill 会自动注册到 OpenClaw 的技能列表中。
+
+#### 方式二：本地文件安装
+
+```bash
+# 从本地 skill.md 安装
+clawhub skill add ./skill.md
+
+# 或使用绝对路径
+clawhub skill add /path/to/skill.md
+```
+
+#### 方式三：Web UI 安装
 
 1. 打开 OpenClaw 客户端，进入 **Skills** 页面
 2. 点击 **Import Skill** → 选择文件
 3. 选择项目根目录的 `skill.md` 文件
-4. 确认导入后，在对话中直接开始使用
+4. 确认导入
+
+### 卸载
+
+```bash
+# CLI 卸载
+clawhub skill remove insentek-api-skill
+```
+
+或在 Web UI 中：Skills → 找到 "insentek-api-skill" → **Remove**。
 
 ### 配置参数
-
-导入时可能需要填写：
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
@@ -42,25 +78,67 @@ OpenClaw 会自动解析 skill.md 中的 function schema 并调用 authenticate 
 
 ## Claude Code
 
-### 方法一：项目目录加载（推荐）
+### 安装
 
-1. 将 `skill.md` 放入你的工作项目目录
-2. 在 Claude Code 中打开该目录
-3. Claude Code 会自动识别 skill.md 作为项目上下文
+Claude Code 通过读取 skill 文件来加载技能上下文，支持项目级和全局级两种方式。
 
-```bash
-# 示例目录结构
-my-project/
-├── skill.md          # 放入此文件
-├── src/
-└── ...
+#### 方式一：全局 Skills 目录（推荐）
+
+Claude Code 会从全局 skills 目录自动加载所有 skill 文件，无需在每个项目中重复放置。
+
+**Windows:**
+```powershell
+# 创建 skills 目录（如果不存在）
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills"
+
+# 复制 skill 文件
+Copy-Item skill.md "$env:USERPROFILE\.claude\skills\insentek-api-skill.md"
 ```
 
-### 方法二：直接粘贴
+**macOS:**
+```bash
+mkdir -p ~/.claude/skills
+cp skill.md ~/.claude/skills/insentek-api-skill.md
+```
 
-1. 打开 Claude Code 对话
-2. 将 `skill.md` 的完整内容粘贴到对话中
-3. 告诉 Claude："请根据这份 skill 文件帮我查询 insentek 设备数据"
+**Linux:**
+```bash
+mkdir -p ~/.claude/skills
+cp skill.md ~/.claude/skills/insentek-api-skill.md
+```
+
+放置后重启 Claude Code 或重新打开对话即可生效。
+
+#### 方式二：项目目录加载
+
+将 `skill.md` 放入当前工作项目的根目录，Claude Code 会自动识别为项目上下文：
+
+```bash
+# 任意项目目录
+cp skill.md ./skill.md
+```
+
+#### 方式三：对话中直接引用
+
+```
+# 在 Claude Code 对话中执行
+/load skill.md
+```
+
+或直接将 `skill.md` 内容粘贴到对话中。
+
+### 卸载
+
+- **全局级（推荐）**：从 `~/.claude/skills/` 目录移除对应文件
+  ```bash
+  # Windows
+  Remove-Item "$env:USERPROFILE\.claude\skills\insentek-api-skill.md"
+
+  # macOS / Linux
+  rm ~/.claude/skills/insentek-api-skill.md
+  ```
+- **项目级**：删除项目根目录的 `skill.md` 文件
+- **对话级**：执行 `/clear` 清除当前对话上下文
 
 ### 首次使用
 
@@ -72,7 +150,6 @@ Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling
 
 ### 注意事项
 
-- Claude Code 支持 Markdown 格式的 function schema
 - 确保 skill.md 中的 YAML frontmatter 被正确解析
 - 如果 function calling 未触发，尝试明确说出工具名称如 "query_device"
 
@@ -80,9 +157,28 @@ Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling
 
 ## ChatGPT
 
-### 方法一：Custom Instructions（自定义指令）
+### 安装
 
-适合个人使用，无需创建 GPT。
+#### 方式一：创建 GPT（推荐，需 Plus 订阅）
+
+1. 打开 [ChatGPT](https://chat.openai.com) → **Explore GPTs** → **Create**
+2. 在 Configure 标签页：
+   - **Name**: Insentek Device Query
+   - **Description**: 查询 insentek 物联网设备数据
+   - **Instructions**: 粘贴 `skill.md` 的完整内容
+3. 在 **Capabilities** 中启用 "Code Interpreter"（如需数据处理）
+4. 保存并发布（可选设为 Private）
+
+#### 方式二：Actions（API 直连，需 Plus 订阅）
+
+1. 创建 GPT 时，在 Configure 页面点击 **Add actions**
+2. 粘贴由 `skill.md` function schema 生成的 OpenAPI schema
+3. 设置认证方式：API Key（Header: `Authorization`）
+4. 保存后 GPT 可直接调用 insentek API
+
+#### 方式三：Custom Instructions（个人使用）
+
+适合临时使用，无需创建 GPT。
 
 1. 打开 ChatGPT → 点击头像 → **Custom Instructions**
 2. 在 "How would you like ChatGPT to respond?" 中粘贴 `skill.md` 的 Prompt 区内容
@@ -92,28 +188,13 @@ Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling
    ```
 4. 保存后开始新对话
 
-**限制：** ChatGPT 的 Custom Instructions 不支持真正的 function calling，API 调用需要手动复制 URL 或在插件中配置。
+**限制：** Custom Instructions 不支持真正的 function calling，API 调用需要手动复制 URL。
 
-### 方法二：创建 GPT（推荐）
+### 卸载
 
-需要 ChatGPT Plus 订阅。
-
-1. 打开 ChatGPT → **Explore GPTs** → **Create**
-2. 在 Configure 标签页：
-   - **Name**: Insentek Device Query
-   - **Description**: 查询 insentek 物联网设备数据
-   - **Instructions**: 粘贴 `skill.md` 的完整内容
-3. 在 **Capabilities** 中启用 "Code Interpreter"（如需数据处理）
-4. 保存并发布（可选设为 Private）
-
-### 方法三：Actions（API 直连）
-
-需要 ChatGPT Plus + 可访问的 API 代理。
-
-1. 创建 GPT 时，在 Configure 页面点击 **Add actions**
-2. 粘贴由 `skill.md` function schema 生成的 OpenAPI schema
-3. 设置认证方式：API Key（Header: `Authorization`）
-4. 保存后 GPT 可直接调用 insentek API
+- **GPTs 方式**：ChatGPT → Explore GPTs → 找到对应 GPT → 右上角 ⋮ → **Delete GPT**
+- **Actions 方式**：编辑 GPT → Configure → Actions → **删除对应 Action**
+- **Custom Instructions**：ChatGPT → 头像 → Custom Instructions → **清空内容**
 
 ### 首次使用
 
@@ -127,16 +208,57 @@ User: 查看我的所有设备
 
 ## Hermes-Agent
 
-### 步骤
+### 安装
 
-1. 打开 Hermes-Agent 管理后台
-2. 进入 **Skills** → **Import**
-3. 选择 `skill.md` 文件或粘贴内容
-4. 配置环境变量：
-   ```
-   INSENTEK_BASE_URL=http://openapi.ecois.info
-   ```
-5. 保存并部署
+Hermes-Agent 通过读取 skills 目录下的 skill 文件来加载技能。
+
+#### 步骤
+
+**Windows:**
+```powershell
+# 创建 skills 目录（如果不存在）
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.hermes\skills"
+
+# 复制 skill 文件
+Copy-Item skill.md "$env:USERPROFILE\.hermes\skills\insentek-api-skill.md"
+```
+
+**macOS:**
+```bash
+mkdir -p ~/.hermes/skills
+cp skill.md ~/.hermes/skills/insentek-api-skill.md
+```
+
+**Linux:**
+```bash
+mkdir -p ~/.hermes/skills
+cp skill.md ~/.hermes/skills/insentek-api-skill.md
+```
+
+**重启或刷新：**
+```bash
+hermes skill reload
+# 或重启 Hermes-Agent 服务
+```
+
+### 卸载
+
+**Windows:**
+```powershell
+Remove-Item "$env:USERPROFILE\.hermes\skills\insentek-api-skill.md"
+```
+
+**macOS / Linux:**
+```bash
+rm ~/.hermes/skills/insentek-api-skill.md
+hermes skill reload
+```
+
+### 配置环境变量（可选）
+
+```bash
+export INSENTEK_BASE_URL=http://openapi.ecois.info
+```
 
 ### 首次使用
 
@@ -152,12 +274,13 @@ Hermes-Agent 会解析 skill.md 中的工具定义并执行对应动作。
 
 | 特性 | OpenClaw | Claude Code | ChatGPT (GPTs) | Hermes-Agent |
 |------|----------|-------------|----------------|--------------|
-| Function Schema | ✅ Native | ✅ Native | ⚠️ Via Actions | ✅ Native |
+| Function Schema | Native | Native | Via Actions | Native |
 | YAML Frontmatter | ✅ | ✅ | ⚠️ | ✅ |
-| Auto Token Refresh | ✅ | ✅ | ⚠️ Manual | ✅ |
+| Auto Token Refresh | ✅ | ✅ | Manual | ✅ |
 | Alias Resolution | ✅ | ✅ | ✅ | ✅ |
 | Time Parsing | ✅ | ✅ | ✅ | ✅ |
 | Chain Calling | ✅ | ✅ | ✅ | ✅ |
+| ClawHub 一键安装 | ✅ | ❌ | ❌ | ❌ |
 
 **图例：** ✅ 原生支持 | ⚠️ 需额外配置 | ❌ 不支持
 
