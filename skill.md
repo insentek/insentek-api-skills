@@ -1,12 +1,19 @@
 ---
 name: insentek-openapi
-version: 1.0.0
+version: 1.0.1
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
   历史数据、趋势分析、跨设备对比与数据导出。
 api_base_url: http://openapi.ecois.info
 author: insentek-api-skills
+guardrails:
+  raw_data_output: PROHIBITED
+  # Agent MUST NEVER output raw sensor full data to conversation.
+  # Use --dry-run for preview, export to file for full data, or summarize.
+  dry_run_preview_rows: 5
+  max_chat_rows: 200
+  max_export_rows: 50000
 ---
 
 # Insentek OpenAPI Skill
@@ -127,6 +134,24 @@ IF 输出模式 == "文件导出" AND 数据条数 > 50,000:
 | 历史超限 | "系统仅保留最近 3 年数据。您查询的 [日期] 超出范围，最早支持查询到 [最早日期]。" |
 | 对话展示超限 | "该时间段共有 N 条数据，为您展示统计摘要和首尾各 10 条。如需完整数据，建议导出为 CSV。" |
 | 导出超限 | "数据量较大（N 条），超过单次导出上限 50,000 条。建议缩小时间范围（如改为最近 1 个月）或分批导出。" |
+
+### 2.4 原始数据输出禁令（Raw Data Output Prohibition）
+
+**Agent 绝对禁止将原始传感器全量数据直接输出到对话中。**
+
+| 情景 | 处理方式 |
+|------|---------|
+| 用户说"看看这段数据" | 输出统计摘要 + 首尾各 5 条抽样 |
+| 用户说"调试一下" | 使用 `--dry-run` 预览（数据条数、时间范围、字段摘要、前 N 条预览） |
+| 用户说"给我原始数据" | 引导用户导出为 CSV/Excel 文件，而非对话输出 |
+| 用户说"全部数据发给我" | 拒绝并解释："为控制 Token 消耗与提升体验，完整数据请通过文件导出获取。" |
+
+**Why:** 传感器数据可能每小时采样一次，单次查询数百上千条。直接输出全量数据会：
+1. 导致上下文窗口爆炸（Token 消耗迁增）
+2. 降低模型处理效率（有效信息被淹没）
+3. 影响用户阅读体验（难以聚焦关键信息）
+
+**总之：对话中只提供摘要，文件中存储完整数据。**
 
 ---
 
@@ -435,9 +460,14 @@ Query device data: real-time, historical, specific moment, or incremental sync.
 # Historical data by range (with guardrails)
 python scripts/insentek_cli.py data --token ${token} --sn ${sn} --range ${range} [--include-params ${params}]
 
+# Preview mode -- DO NOT output full data to chat
+python scripts/insentek_cli.py data --token ${token} --sn ${sn} --range ${range} --dry-run
+
 # For real-time data (latest), direct API call is acceptable:
 curl -s -H "Authorization: ${token}" "http://openapi.ecois.info/v3/device/${sn}/latest"
 ```
+
+**Dry-Run Mode:** When debugging or previewing, ALWAYS append `--dry-run` to any `data` or `export` call. This outputs a safe preview instead of full data.
 
 **Chain Pattern:** `query_data` requires `sn`. If user provides alias, call `query_device` first to resolve.
 
@@ -466,6 +496,38 @@ curl -s -H "Authorization: ${token}" "http://openapi.ecois.info/v3/device/${sn}/
 当用户意图明确为"文件导出"时，调用以下脚本而非 `query_data`。
 
 **注意**："生成报告"类需求不由脚本处理，由 Agent 动态分析并生成（见 [8.3](#83-深度分析报告-agent-generated-analysis-report)）。
+
+### 6.0 dry-run 预览模式（所有导出脚本通用）
+
+**任何导出/报告脚本均支持 `--dry-run`，Agent 在调试或预览时必须优先使用。**
+
+```bash
+python scripts/insentek_cli.py export --sn ${sn} --range ${range} --format csv --output ${filename}.csv --dry-run
+python scripts/export_excel.py --sn ${sn} --range ${range} --output ${filename}.xlsx --dry-run
+```
+
+**Dry-Run 输出格式：**
+```json
+{
+  "dry_run": true,
+  "total": 1250,
+  "time_range": {"start": "20250101", "end": "20250131"},
+  "fields": {
+    "nodes": ["10cm", "20cm", "30cm"],
+    "parameters": ["moisture", "temperature", "ec"]
+  },
+  "preview": [
+    {"timestamp": 1735689600, "datetime": "2025-01-01 00:00:00", "node": "10cm", "parameter": "moisture", "value": 23.5},
+    ...
+  ],
+  "message": "Dry run: 1250 records, 3 nodes, 3 parameters. First 5 rows shown. Use without --dry-run to export full data."
+}
+```
+
+**Dry-Run 行为：**
+- 不写入任何文件
+- 仅返回数据条数、时间范围、字段摘要、前 5 条抽样
+- 可用于验证查询条件是否正确，再决定是否执行全量导出
 
 ### 6.1 export_csv
 
@@ -932,3 +994,5 @@ When a script returns `"success": false`, Agent should:
 - **Alias matching**: Use case-insensitive partial match on `alias` field from `/v3/devices`.
 - **Parameter names**: Always prefer Chinese names from `/description` endpoint when displaying to users.
 - **Script-first**: Agent should prefer calling `scripts/insentek_cli.py` over raw `curl` for all operations. Use `curl` only for `/latest` real-time queries or when scripts are unavailable.
+- **Dry-run first**: When debugging or previewing data, always append `--dry-run` to `data`, `export`, `report`, or `chart` commands. Never output raw full sensor data to conversation.
+- **Raw data prohibition**: Full sensor data must only be delivered via file export (CSV/Excel/JSON), never dumped into chat context.

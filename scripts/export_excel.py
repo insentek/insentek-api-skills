@@ -108,7 +108,39 @@ def flatten_data(api_response):
     return rows
 
 
-def export_excel(token, sn, range_str, output_path, include_params=None):
+DRY_RUN_PREVIEW_ROWS = 5
+
+
+def dry_run_summary(result, sn, range_str):
+    """生成 --dry-run 预览输出。"""
+    if result.get("_validation_error") or result.get("_http_error"):
+        print(json.dumps({"success": False, "error": result.get("message") or result.get("error")}, ensure_ascii=False, indent=2))
+        sys.exit(1)
+
+    total = result.get("total", 0)
+    flat = flatten_data(result)
+    nodes = sorted(set(r["node"] for r in flat))
+    params = sorted(set(r["parameter"] for r in flat))
+    preview = flat[:DRY_RUN_PREVIEW_ROWS]
+
+    output = {
+        "dry_run": True,
+        "total": total,
+        "time_range": {
+            "start": range_str.split(",")[0] if "," in range_str else "",
+            "end": range_str.split(",")[1] if "," in range_str else ""
+        },
+        "fields": {
+            "nodes": nodes,
+            "parameters": params
+        },
+        "preview": preview,
+        "message": f"Dry run: {total} records, {len(nodes)} nodes, {len(params)} parameters. First {len(preview)} rows shown. Use without --dry-run to export full data."
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+
+
+def export_excel(token, sn, range_str, output_path, include_params=None, dry_run=False):
     result = query_data(token, sn, range_str, include_params)
     if result.get("_validation_error") or result.get("_http_error"):
         print(json.dumps({"success": False, "error": result.get("message") or result.get("error")}, ensure_ascii=False, indent=2))
@@ -121,6 +153,10 @@ def export_excel(token, sn, range_str, output_path, include_params=None):
             "error": f"数据量 {total} 条超过导出上限 {MAX_EXPORT_ROWS} 条，建议缩小时间范围或分批导出。"
         }, ensure_ascii=False, indent=2))
         sys.exit(1)
+
+    if dry_run:
+        dry_run_summary(result, sn, range_str)
+        return
 
     rows = flatten_data(result)
     if not rows:
@@ -227,11 +263,12 @@ def main():
     parser.add_argument("--output", required=True)
     parser.add_argument("--include-params", default=None)
     parser.add_argument("--api-base", default=API_BASE_URL)
+    parser.add_argument("--dry-run", action="store_true", help="仅预览数据摘要，不写入文件")
     args = parser.parse_args()
 
     API_BASE_URL = args.api_base
 
-    export_excel(args.token, args.sn, args.range, args.output, args.include_params)
+    export_excel(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
 
 
 if __name__ == "__main__":

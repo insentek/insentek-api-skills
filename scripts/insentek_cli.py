@@ -9,10 +9,10 @@ Usage:
     python insentek_cli.py auth --appid APPID --secret SECRET
     python insentek_cli.py devices --token TOKEN [--page 1] [--limit 20]
     python insentek_cli.py device --sn SN --token TOKEN
-    python insentek_cli.py data --sn SN --range START,END --token TOKEN [--include-params moisture,temperature]
-    python insentek_cli.py export --sn SN --range START,END --format csv --token TOKEN --output file.csv
-    python insentek_cli.py report --sn SN --range START,END --token TOKEN --output report.html
-    python insentek_cli.py chart --sn SN --range START,END --type scatter --params airTemperature,relativeHumidity --title "标题" --conclusion "分析结论" --token TOKEN --output chart.html
+    python insentek_cli.py data --sn SN --range START,END --token TOKEN [--include-params moisture,temperature] [--dry-run]
+    python insentek_cli.py export --sn SN --range START,END --format csv --token TOKEN --output file.csv [--dry-run]
+    python insentek_cli.py report --sn SN --range START,END --token TOKEN --output report.html [--dry-run]
+    python insentek_cli.py chart --sn SN --range START,END --type scatter --params airTemperature,relativeHumidity --title "标题" --conclusion "分析结论" --token TOKEN --output chart.html [--dry-run]
 """
 
 import argparse
@@ -36,6 +36,7 @@ MAX_RANGE_DAYS = 365
 MAX_HISTORY_YEARS = 3
 MAX_CHAT_ROWS = 200
 MAX_EXPORT_ROWS = 50000
+DRY_RUN_PREVIEW_ROWS = 5
 
 
 def api_request(path, headers=None, params=None, method="GET", data=None):
@@ -213,7 +214,40 @@ def pivot_data(api_response, sn):
     return fieldnames, rows
 
 
-def export_csv(token, sn, range_str, output_path, include_params=None):
+def dry_run_summary(result, sn, range_str):
+    """
+    生成 --dry-run 预览输出：数据条数、时间范围、字段摘要、前 N 条预览。
+    不写入文件，仅输出结构化 JSON。
+    """
+    if result.get("_validation_error") or result.get("_http_error"):
+        print(json.dumps({"success": False, "error": result.get("message") or result.get("error")}, ensure_ascii=False, indent=2))
+        sys.exit(1)
+
+    total = result.get("total", 0)
+    flat = flatten_data(result)
+
+    nodes = sorted(set(r["node"] for r in flat))
+    params = sorted(set(r["parameter"] for r in flat))
+    preview = flat[:DRY_RUN_PREVIEW_ROWS]
+
+    output = {
+        "dry_run": True,
+        "total": total,
+        "time_range": {
+            "start": range_str.split(",")[0] if "," in range_str else "",
+            "end": range_str.split(",")[1] if "," in range_str else ""
+        },
+        "fields": {
+            "nodes": nodes,
+            "parameters": params
+        },
+        "preview": preview,
+        "message": f"Dry run: {total} records, {len(nodes)} nodes, {len(params)} parameters. First {len(preview)} rows shown. Use without --dry-run to export full data."
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+
+
+def export_csv(token, sn, range_str, output_path, include_params=None, dry_run=False):
     """导出数据为 CSV 文件（宽格式：每行一个时间点，参数作为列）。"""
     result = query_data(token, sn, range_str, include_params)
     if result.get("_validation_error") or result.get("_http_error"):
@@ -227,6 +261,10 @@ def export_csv(token, sn, range_str, output_path, include_params=None):
             "error": f"数据量 {total} 条超过导出上限 {MAX_EXPORT_ROWS} 条，建议缩小时间范围或分批导出。"
         }, ensure_ascii=False, indent=2))
         sys.exit(1)
+
+    if dry_run:
+        dry_run_summary(result, sn, range_str)
+        return
 
     fieldnames, rows = pivot_data(result, sn)
     if not rows:
@@ -247,7 +285,7 @@ def export_csv(token, sn, range_str, output_path, include_params=None):
     }, ensure_ascii=False, indent=2))
 
 
-def export_json(token, sn, range_str, output_path, include_params=None):
+def export_json(token, sn, range_str, output_path, include_params=None, dry_run=False):
     """导出原始 API 响应为 JSON 文件。"""
     result = query_data(token, sn, range_str, include_params)
     if result.get("_validation_error") or result.get("_http_error"):
@@ -262,6 +300,10 @@ def export_json(token, sn, range_str, output_path, include_params=None):
         }, ensure_ascii=False, indent=2))
         sys.exit(1)
 
+    if dry_run:
+        dry_run_summary(result, sn, range_str)
+        return
+
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
@@ -273,7 +315,7 @@ def export_json(token, sn, range_str, output_path, include_params=None):
     }, ensure_ascii=False, indent=2))
 
 
-def generate_report(token, sn, range_str, output_path, include_params=None):
+def generate_report(token, sn, range_str, output_path, include_params=None, dry_run=False):
     """生成简单的 HTML 报告，含数据表格和趋势统计。"""
     result = query_data(token, sn, range_str, include_params)
     if result.get("_validation_error") or result.get("_http_error"):
@@ -287,6 +329,10 @@ def generate_report(token, sn, range_str, output_path, include_params=None):
             "error": f"数据量 {total} 条超过报告上限 {MAX_EXPORT_ROWS} 条，建议缩小时间范围。"
         }, ensure_ascii=False, indent=2))
         sys.exit(1)
+
+    if dry_run:
+        dry_run_summary(result, sn, range_str)
+        return
 
     # 统计数据仍用长格式
     flat_rows = flatten_data(result)
@@ -459,7 +505,7 @@ def extract_param_names(description):
     return mapping
 
 
-def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, output_path, include_params=None):
+def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, output_path, include_params=None, dry_run=False):
     result = query_data(token, sn, range_str, include_params)
     if result.get("_validation_error") or result.get("_http_error"):
         print(json.dumps({"success": False, "error": result.get("message") or result.get("error")}, ensure_ascii=False, indent=2))
@@ -469,6 +515,10 @@ def generate_chart(token, sn, range_str, chart_type, params, title, conclusion, 
     if total > MAX_EXPORT_ROWS:
         print(json.dumps({"success": False, "error": f"数据量 {total} 条超过报告上限 {MAX_EXPORT_ROWS} 条"}, ensure_ascii=False, indent=2))
         sys.exit(1)
+
+    if dry_run:
+        dry_run_summary(result, sn, range_str)
+        return
 
     data_list = result.get("list", [])
     if not data_list:
@@ -861,6 +911,9 @@ def check_environment(api_base=API_BASE_URL):
 def cmd_data(args):
     """data 子命令：查询数据并以 JSON 输出到 stdout。"""
     result = query_data(args.token, args.sn, args.range, args.include_params, args.include_nodes)
+    if args.dry_run:
+        dry_run_summary(result, args.sn, args.range)
+        return
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -893,6 +946,7 @@ def main():
     data_p.add_argument("--range", required=True, help="格式: YYYYMMDD,YYYYMMDD")
     data_p.add_argument("--include-params", default=None)
     data_p.add_argument("--include-nodes", default=None)
+    data_p.add_argument("--dry-run", action="store_true", help="仅预览数据摘要，不输出全量数据")
     data_p.set_defaults(func=cmd_data)
 
     # export
@@ -903,6 +957,7 @@ def main():
     exp_p.add_argument("--format", choices=["csv", "json", "html"], required=True)
     exp_p.add_argument("--output", required=True)
     exp_p.add_argument("--include-params", default=None)
+    exp_p.add_argument("--dry-run", action="store_true", help="仅预览数据摘要，不写入文件")
 
     # report
     rep_p = sub.add_parser("report", help="生成 HTML 数据报告")
@@ -911,6 +966,7 @@ def main():
     rep_p.add_argument("--range", required=True)
     rep_p.add_argument("--output", required=True)
     rep_p.add_argument("--include-params", default=None)
+    rep_p.add_argument("--dry-run", action="store_true", help="仅预览数据摘要，不生成报告")
 
     # chart
     chart_p = sub.add_parser("chart", help="生成动态图表 HTML（由 AI 决定图表类型）")
@@ -923,6 +979,7 @@ def main():
     chart_p.add_argument("--conclusion", default="", help="分析结论文字")
     chart_p.add_argument("--output", required=True)
     chart_p.add_argument("--include-params", default=None)
+    chart_p.add_argument("--dry-run", action="store_true", help="仅预览数据摘要，不生成图表")
 
     # check
     check_p = sub.add_parser("check", help="环境前置检查")
@@ -944,15 +1001,15 @@ def main():
         args.func(args)
     elif args.command == "export":
         if args.format == "csv":
-            export_csv(args.token, args.sn, args.range, args.output, args.include_params)
+            export_csv(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
         elif args.format == "json":
-            export_json(args.token, args.sn, args.range, args.output, args.include_params)
+            export_json(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
         elif args.format == "html":
-            generate_report(args.token, args.sn, args.range, args.output, args.include_params)
+            generate_report(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
     elif args.command == "report":
-        generate_report(args.token, args.sn, args.range, args.output, args.include_params)
+        generate_report(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
     elif args.command == "chart":
-        generate_chart(args.token, args.sn, args.range, args.type, args.params, args.title, args.conclusion, args.output, args.include_params)
+        generate_chart(args.token, args.sn, args.range, args.type, args.params, args.title, args.conclusion, args.output, args.include_params, args.dry_run)
 
 
 if __name__ == "__main__":
