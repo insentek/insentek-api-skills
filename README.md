@@ -46,35 +46,26 @@ User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
 
 ```
 .
-├── skill.md                     # 核心技能文件
+├── skill.md                     # 核心技能文件 (Runtime Contract)
 ├── docs/
 │   ├── getting-started.md       # 快速开始指南
 │   ├── platform-setup.md        # 各平台配置指南
+│   ├── interaction.md           # 交互规范 (意图/时间/输出格式)
+│   └── analysis.md              # 分析策略 (报告/告警/行业参数)
 ├── reference/
 │   └── api-doc.md               # 完整 API 文档 (OpenAPI v3.1.9)
 ├── examples/
 │   ├── queries.md               # 查询类对话示例
 │   ├── reports.md               # 报告生成示例
-│   └── alerts.md                # 异常分析示例
+│   └── flows.md                 # 核心交互流程示例
 ├── scripts/                     # 参考实现脚本
 │   ├── insentek_cli.py          # 统一 CLI（认证/查询/导出）
 │   ├── export_excel.py          # Excel 导出
 │   └── README.md                # 脚本使用说明
 ├── PLATFORM-TEST.md             # 跨平台测试计划（自检清单）
-├── ref/                         # 参考材料（API 仓库 + 文档）
-│   ├── api-repo/                # Spring Boot API 源码
-│   └── api-document-latest.pdf  # 官方接口文档
-└── .planning/                   # 项目规划文档
-    ├── PROJECT.md
-    ├── REQUIREMENTS.md
-    ├── ROADMAP.md
-    ├── STATE.md
-    └── phases/
-        ├── 01-api-interface-mapping/
-        ├── 02-skill-core/
-        ├── 03-documentation/
-        ├── 04-examples/
-        └── 05-platform-test/
+└── ref/                         # 参考材料（API 仓库 + 文档）
+    ├── api-repo/                # Spring Boot API 源码
+    └── api-document-latest.pdf  # 官方接口文档
 ```
 
 ---
