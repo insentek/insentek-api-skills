@@ -1,6 +1,6 @@
 ---
 name: insentek-openapi
-version: 1.0.2
+version: 1.0.3
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
@@ -134,6 +134,44 @@ IF 输出模式 == "文件导出" AND 数据条数 > 50,000:
 | 历史超限 | "系统仅保留最近 3 年数据。您查询的 [日期] 超出范围，最早支持查询到 [最早日期]。" |
 | 对话展示超限 | "该时间段共有 N 条数据，为您展示统计摘要和首尾各 10 条。如需完整数据，建议导出为 CSV。" |
 | 导出超限 | "数据量较大（N 条），超过单次导出上限 50,000 条。建议缩小时间范围（如改为最近 1 个月）或分批导出。" |
+
+### 2.5 数据可用性校验（Data Availability Check）
+
+每次 `query_data` 返回数据后，Agent **必须**检查实际数据的时间范围与用户请求范围是否一致。
+
+```
+requested_start, requested_end = 用户请求的时间范围
+actual_start   = min(record.datetime for record in data.list)
+actual_end     = max(record.datetime for record in data.list)
+requested_days = (requested_end - requested_start).days + 1
+actual_days    = (actual_end - actual_start).days + 1
+
+IF actual_start > requested_start OR actual_end < requested_end:
+  → 数据范围不完整
+  → coverage_ratio = actual_days / requested_days
+
+  IF coverage_ratio < 0.5 OR actual_days < 7:
+    → **STOP and confirm with user**
+    → Agent replies:
+      "您请求的 [时间段描述] 共约 [requested_days] 天，
+       但该设备实际仅有 [actual_start] 至 [actual_end] 共 [actual_days] 天的数据。
+
+       可能原因：
+       - 设备在该时间段尚未部署或激活
+       - 设备期间出现离线/故障导致数据缺失
+
+       是否继续基于现有 [actual_days] 天数据生成报告？"
+    → WAIT for user confirmation before proceeding
+
+  ELSE:
+    → 数据覆盖比例尚可，但需在报告中注明实际范围
+    → Report header must use actual range, NOT the requested range
+```
+
+**关键规则：**
+- 报告标题/表头中的时间范围 **必须**使用实际数据范围，不得使用用户请求的原始范围
+- 若数据覆盖不足 50% 或少于 7 天，**必须先询问用户确认**，不得擅自生成报告
+- 用户确认后，报告中应标注 `"基于实际可用数据: [actual_range]"`
 
 ### 2.4 原始数据输出禁令（Raw Data Output Prohibition）
 
@@ -705,6 +743,11 @@ The following are **examples**, not exhaustive rules. Agent should adapt to user
 User: "分析这台设备温湿度的关系，生成 HTML 报告"
   → query_device → resolve sn
   → query_data → retrieve data
+  → 【数据可用性校验】检查实际数据范围 vs 请求范围
+       IF 覆盖不足 50% 或少于 7 天:
+         → STOP，向用户说明实际数据范围并询问是否继续
+       ELSE:
+         → 继续下一步
   → Agent analyzes data (correlation, segmentation, etc.)
   → Agent dynamically constructs HTML with ECharts visualizations
   → Save HTML file → return path to user
@@ -720,11 +763,16 @@ User: "分析这台设备温湿度的关系，生成 HTML 报告"
 6. **Cleanup temporary scripts**: Any temporary Python scripts created solely for report generation MUST be deleted immediately after the report is generated. Only the final deliverable (HTML/CSV/Excel) should remain
 
 **Example Report Structure:**
-- Header: device info, location, time range, data count
+- Header: device info, location, **actual data time range** (not requested range), data count
 - Key Findings: summary cards with core metrics
 - Visual Analysis: interactive charts (ECharts)
 - Detailed Results: tables, statistics, comparisons
 - Conclusion: narrative explanation of what the data means
+
+**报告时间范围标注规范：**
+- 若实际数据范围 = 请求范围：正常标注 `"分析时段: [范围]"`
+- 若实际数据范围 < 请求范围：必须标注 `"分析时段: [actual_range]（您请求的 [requested_range] 数据中，该设备仅有此区间数据）"`
+- 绝不允许用请求范围替代实际范围，避免误导用户
 
 **Anti-pattern:** Do NOT create `generate_report_v2.py`, `analyze_correlation.py`, etc. in the project directory. Each analysis report should be generated ad-hoc.
 
@@ -889,13 +937,14 @@ User: "导出3号设备最近2年的数据"
   → export_csv(sn, range="20230513,20240512", output="data_2023-2024.csv")
 ```
 
-### Flow 6: "生成报告"
+### Flow 6: "生成报告（数据范围完整）"
 
 ```
 User: "给3号设备生成一份上周的报告"
   → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → query_data(sn, range) → retrieve data
+  → 【数据可用性校验】实际数据覆盖完整周 → PASS
   → Agent analyzes data (statistics, trends, anomalies)
   → Agent dynamically constructs HTML report with ECharts visualizations
   → Save HTML file → 返回报告路径
@@ -904,6 +953,7 @@ User: "分析3号设备温湿度的关系，生成 HTML 报告"
   → check auth state → authenticate if needed
   → query_device(alias="3号") → resolve sn
   → query_data(sn, range) → retrieve data
+  → 【数据可用性校验】实际数据覆盖完整 → PASS
   → Agent analyzes: Pearson correlation, day/night segmentation, etc.
   → Agent dynamically constructs HTML with scatter plot + trend chart
   → Save HTML file → 返回报告路径
@@ -911,7 +961,32 @@ User: "分析3号设备温湿度的关系，生成 HTML 报告"
 
 **注意**：两种场景均由 Agent 动态分析并生成报告，不调用任何脚本模板。
 
-### Flow 7: "多设备对比导出"
+### Flow 7: "生成报告（数据范围不匹配 — 必须确认）"
+
+```
+User: "分析11684501348336近三个月的数据，生成报告"
+  → check auth state → authenticate if needed
+  → query_device(alias="11684501348336") → resolve sn
+  → query_data(sn, time_expression="最近3个月")
+     → 请求范围: 2026-02-22 ~ 2026-05-22 (90天)
+     → 实际返回: 2025-05-10 ~ 2025-05-22 (13天)
+  → 【数据可用性校验】13/90 = 14% < 50% → STOP
+
+  Agent: "您请求的『近3个月』共约 90 天，
+         但该设备实际仅有 2025-05-10 至 2025-05-22 共 13 天的数据。
+
+         可能原因：设备在该时间段尚未部署或激活。
+
+         是否继续基于现有 13 天数据生成报告？"
+
+  User: "继续"
+  → Agent analyzes: 统计摘要、趋势分析、异常检测
+  → Agent constructs HTML report
+     → 报告表头标注: "分析时段: 2025-05-10 至 2025-05-22（基于实际可用数据）"
+  → Save HTML file → 返回报告路径
+```
+
+### Flow 8: "多设备对比导出"
 ```
 User: "把1号和2号设备最近一周的温度对比导出为Excel"
   → check auth state → authenticate if needed

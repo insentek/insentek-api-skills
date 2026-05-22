@@ -26,7 +26,7 @@
 clawhub skill install insentek-api-skill
 
 # 安装指定版本
-clawhub skill install insentek-api-skill@1.0.2
+clawhub skill install insentek-api-skill@1.0.3
 
 # 从 ClawHub 搜索确认
 clawhub skill search insentek
