@@ -6,11 +6,18 @@ Insentek OpenAPI Unified CLI
 Agent 通过调用此脚本执行所有操作，而非直接使用 curl。
 
 Usage:
-    python insentek_cli.py auth --appid APPID --secret SECRET
-    python insentek_cli.py devices --token TOKEN [--page 1] [--limit 20]
-    python insentek_cli.py device --sn SN --token TOKEN
-    python insentek_cli.py data --sn SN --range START,END --token TOKEN [--include-params moisture,temperature] [--dry-run]
-    python insentek_cli.py export --sn SN --range START,END --format csv --token TOKEN --output file.csv [--dry-run]
+    # 首次配置（仅需一次）
+    python insentek_cli.py auth --appid APPID --secret SECRET --save
+    
+    # 后续使用（无需 --token）
+    python insentek_cli.py devices [--page 1] [--limit 20]
+    python insentek_cli.py device --sn SN
+    python insentek_cli.py data --sn SN --range START,END [--include-params moisture,temperature] [--dry-run]
+    python insentek_cli.py export --sn SN --range START,END --format csv --output file.csv [--dry-run]
+    
+    # 管理凭据
+    python insentek_cli.py auth --status
+    python insentek_cli.py auth --clear
 """
 
 import argparse
@@ -18,6 +25,7 @@ import csv
 import json
 import os
 import platform
+import stat
 import subprocess
 import sys
 import urllib.error
@@ -27,6 +35,10 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "http://openapi.ecois.info")
+
+# 配置文件路径
+CONFIG_DIR = Path.home() / ".config" / "insentek"
+CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
 
 # 边界限制常量
 MAX_RANGE_DAYS = 365
@@ -64,13 +76,121 @@ def api_request(path, headers=None, params=None, method="GET", data=None):
         return {"_http_error": True, "status": 0, "error": {"message": str(e)}}
 
 
-def authenticate(appid, secret):
-    """获取 access token。"""
+def load_credentials():
+    """从配置文件读取凭据。"""
+    if not CREDENTIALS_FILE.exists():
+        return None
+    try:
+        with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def save_credentials(appid, secret):
+    """保存凭据到配置文件，权限设置为 600。"""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    data = {
+        "appid": appid,
+        "secret": secret,
+        "created_at": datetime.utcnow().isoformat() + "Z"
+    }
+    with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    # 设置文件权限为 600（仅所有者可读写）
+    os.chmod(CREDENTIALS_FILE, stat.S_IRUSR | stat.S_IWUSR)
+    return data
+
+
+def clear_credentials():
+    """清除保存的凭据。"""
+    if CREDENTIALS_FILE.exists():
+        CREDENTIALS_FILE.unlink()
+        return True
+    return False
+
+
+def get_credentials(appid=None, secret=None):
+    """
+    获取凭据。
+    优先级：1. 命令行参数 2. 配置文件
+    """
+    if appid and secret:
+        return {"appid": appid, "secret": secret}
+    
+    creds = load_credentials()
+    if creds:
+        return creds
+    
+    return None
+
+
+def get_token(appid=None, secret=None):
+    """
+    获取 token。
+    每次调用都根据凭据临时获取新 token，不管理生命周期。
+    """
+    creds = get_credentials(appid, secret)
+    if not creds:
+        return None, "未配置凭据。请先运行: python insentek_cli.py auth --appid xxx --secret SECRET --save"
+    
+    result = api_request("/v3/token", params={"appid": creds["appid"], "secret": creds["secret"]})
+    if result.get("_http_error"):
+        return None, f"认证失败: {result.get('error', {}).get('message', '未知错误')}"
+    
+    return result.get("token"), None
+
+
+def authenticate(appid, secret, save=False, status=False, clear=False):
+    """处理认证相关操作。"""
+    if clear:
+        if clear_credentials():
+            print(json.dumps({"success": True, "message": "凭据已清除"}, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps({"success": False, "message": "没有已保存的凭据"}, ensure_ascii=False, indent=2))
+        return
+    
+    if status:
+        creds = load_credentials()
+        if creds:
+            # 不显示完整 secret，只显示前4位和后4位
+            secret_display = creds.get("secret", "")
+            if len(secret_display) > 8:
+                secret_display = secret_display[:4] + "****" + secret_display[-4:]
+            print(json.dumps({
+                "success": True,
+                "appid": creds.get("appid"),
+                "secret": secret_display,
+                "created_at": creds.get("created_at"),
+                "config_path": str(CREDENTIALS_FILE)
+            }, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps({"success": False, "message": "未配置凭据"}, ensure_ascii=False, indent=2))
+        return
+    
+    # 获取 token 验证凭据有效性
     result = api_request("/v3/token", params={"appid": appid, "secret": secret})
     if result.get("_http_error"):
         print(json.dumps({"success": False, "error": result["error"]}, ensure_ascii=False, indent=2))
         sys.exit(1)
-    print(json.dumps({"success": True, "token": result.get("token"), "expires": result.get("expires")}, ensure_ascii=False, indent=2))
+    
+    token = result.get("token")
+    expires = result.get("expires")
+    
+    output = {
+        "success": True,
+        "token": token,
+        "expires": expires,
+        "message": f"认证成功，token 有效期 {expires} 秒"
+    }
+    
+    if save:
+        save_credentials(appid, secret)
+        output["saved"] = True
+        output["config_path"] = str(CREDENTIALS_FILE)
+        output["message"] += f"，凭据已保存到 {CREDENTIALS_FILE}"
+    
+    print(json.dumps(output, ensure_ascii=False, indent=2))
 
 
 def list_devices(token, page=1, limit=20):
@@ -431,7 +551,8 @@ def check_environment(api_base=API_BASE_URL):
 
 def cmd_data(args):
     """data 子命令：查询数据并以 JSON 输出到 stdout。"""
-    result = query_data(args.token, args.sn, args.range, args.include_params, args.include_nodes)
+    token = resolve_token(args.token)
+    result = query_data(token, args.sn, args.range, args.include_params, args.include_nodes)
     if args.dry_run:
         dry_run_summary(result, args.sn, args.range)
         return
@@ -445,24 +566,27 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
 
     # auth
-    auth_p = sub.add_parser("auth", help="获取 access token")
-    auth_p.add_argument("--appid", required=True)
-    auth_p.add_argument("--secret", required=True)
+    auth_p = sub.add_parser("auth", help="获取 access token 或管理凭据")
+    auth_p.add_argument("--appid", help="E 生态应用 ID（首次配置需要）")
+    auth_p.add_argument("--secret", help="E 生态应用密钥（首次配置需要）")
+    auth_p.add_argument("--save", action="store_true", help="保存凭据到本地配置文件")
+    auth_p.add_argument("--status", action="store_true", help="查看当前保存的凭据状态")
+    auth_p.add_argument("--clear", action="store_true", help="清除保存的凭据")
 
     # devices
     devs_p = sub.add_parser("devices", help="查询设备列表")
-    devs_p.add_argument("--token", required=True)
+    devs_p.add_argument("--token", help="访问令牌（可选，如未提供则自动从配置获取）")
     devs_p.add_argument("--page", type=int, default=1)
     devs_p.add_argument("--limit", type=int, default=20)
 
     # device
     dev_p = sub.add_parser("device", help="查询设备详情")
-    dev_p.add_argument("--token", required=True)
+    dev_p.add_argument("--token", help="访问令牌（可选，如未提供则自动从配置获取）")
     dev_p.add_argument("--sn", required=True)
 
     # data
     data_p = sub.add_parser("data", help="查询设备历史数据（含边界检查）")
-    data_p.add_argument("--token", required=True)
+    data_p.add_argument("--token", help="访问令牌（可选，如未提供则自动从配置获取）")
     data_p.add_argument("--sn", required=True)
     data_p.add_argument("--range", required=True, help="格式: YYYYMMDD,YYYYMMDD")
     data_p.add_argument("--include-params", default=None)
@@ -472,7 +596,7 @@ def main():
 
     # export
     exp_p = sub.add_parser("export", help="导出数据为文件")
-    exp_p.add_argument("--token", required=True)
+    exp_p.add_argument("--token", help="访问令牌（可选，如未提供则自动从配置获取）")
     exp_p.add_argument("--sn", required=True)
     exp_p.add_argument("--range", required=True)
     exp_p.add_argument("--format", choices=["csv", "json"], required=True)
@@ -491,18 +615,39 @@ def main():
     if args.command == "check":
         check_environment(args.api_base)
     elif args.command == "auth":
-        authenticate(args.appid, args.secret)
+        if args.status or args.clear or (args.appid and args.secret):
+            authenticate(args.appid, args.secret, save=args.save, status=args.status, clear=args.clear)
+        else:
+            print(json.dumps({
+                "success": False,
+                "error": "请提供 --appid 和 --secret *** --status 查看状态，或 --clear 清除凭据"
+            }, ensure_ascii=False, indent=2))
+            sys.exit(1)
     elif args.command == "devices":
-        list_devices(args.token, args.page, args.limit)
+        token = resolve_token(args.token)
+        list_devices(token, args.page, args.limit)
     elif args.command == "device":
-        get_device(args.token, args.sn)
+        token = resolve_token(args.token)
+        get_device(token, args.sn)
     elif args.command == "data":
         args.func(args)
     elif args.command == "export":
+        token = resolve_token(args.token)
         if args.format == "csv":
-            export_csv(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
+            export_csv(token, args.sn, args.range, args.output, args.include_params, args.dry_run)
         elif args.format == "json":
-            export_json(args.token, args.sn, args.range, args.output, args.include_params, args.dry_run)
+            export_json(token, args.sn, args.range, args.output, args.include_params, args.dry_run)
+
+
+def resolve_token(token_arg):
+    """解析 token：优先使用命令行参数，其次自动获取。"""
+    if token_arg:
+        return token_arg
+    token, error = get_token()
+    if error:
+        print(json.dumps({"success": False, "error": error}, ensure_ascii=False, indent=2))
+        sys.exit(1)
+    return token
 
 
 if __name__ == "__main__":
