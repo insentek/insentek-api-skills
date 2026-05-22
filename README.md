@@ -50,7 +50,8 @@ User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
 ├── docs/
 │   ├── getting-started.md       # 快速开始指南
 │   ├── platform-setup.md        # 各平台配置指南
-│   └── api-reference.md         # API 参数详细说明
+├── reference/
+│   └── api-doc.md               # 完整 API 文档 (OpenAPI v3.1.9)
 ├── examples/
 │   ├── queries.md               # 查询类对话示例
 │   ├── reports.md               # 报告生成示例
@@ -162,7 +163,7 @@ Agent: 🔋 巡检报告 — 2号大棚 2.85V 🔴 过低
 - **设备**: `/v3/devices`, `/v3/device/{sn}`, `/v3/device/{sn}/description`
 - **数据**: `/v3/device/{sn}/data`, `/latest`, `/moment/{datetime}`, `/incremental`
 
-完整参数说明见 [`docs/api-reference.md`](docs/api-reference.md)。
+完整参数说明见 [`reference/api-doc.md`](reference/api-doc.md)。
 
 ---
 

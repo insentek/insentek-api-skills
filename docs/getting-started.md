@@ -109,7 +109,7 @@ Agent 会自动：
 ## 下一步
 
 - 查看 [platform-setup.md](platform-setup.md) 了解各平台详细配置步骤
-- 查看 [api-reference.md](api-reference.md) 了解 API 参数详情
+- 查看 [`reference/api-doc.md`](../reference/api-doc.md) 了解完整 API 参数详情
 - 查看项目根目录 `examples/` 目录中的对话示例
 
 ---
