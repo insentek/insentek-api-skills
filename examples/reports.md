@@ -1,6 +1,7 @@
 # Examples: Report Generation — 报告生成示例
 
 > 展示 Agent 如何根据设备数据生成结构化报告。
+> 报告生成指南见 [`docs/analysis.md`](../docs/analysis.md)。
 
 ---
 

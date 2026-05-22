@@ -1,6 +1,36 @@
 Changelog
 =========
 
+[1.1.0] - 2026-05-22
+--------------------
+
+Changed
+-------
+
+- **结构性重构: skill.md 模块化拆分**
+  - 主 `skill.md` 从 1100+ 行瘦身至 ~250 行 (Runtime Contract 风格)
+  - 新增 `docs/interaction.md` — 意图解析、时间表达式、输出格式、确认策略
+  - 新增 `docs/analysis.md` — 分析策略、报告生成、告警规则、行业参数
+  - 新增 `examples/flows.md` — 3 个核心交互示例（查询/导出/报告含数据校验）
+  - 删除 `examples/alerts.md`（内容合并至 docs/analysis.md）
+
+- **MUST → SHOULD 降级**
+  - 安全/护栏类保持 MUST（raw_data_output, span limit, auth security）
+  - 分析类降级为 SHOULD / RECOMMENDED / PREFER
+  - 模型分析创造力不再被规则过度压制
+
+- **三层职责分离**
+  - Runtime Contract（skill.md）: 工具、护栏、认证、路由
+  - Interaction Policy（docs/interaction.md）: UX、确认、输出格式
+  - Analysis Engine（docs/analysis.md）: 动态分析、报告、可视化
+
+- **新增 Routing 决策表**
+  - skill.md Section 1: L1意图 × L2输出 → 工具路由矩阵
+  - Agent 无需逐行阅读即可快速定位调用路径
+
+- **版本号统一 bumped 1.0.3 → 1.1.0**
+  - skill.md, README.md, PLATFORM-TEST.md, docs/platform-setup.md
+
 [1.0.3] - 2026-05-22
 --------------------
 

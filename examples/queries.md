@@ -1,6 +1,7 @@
 # Examples: Query Conversations — 查询类对话示例
 
 > 展示用户如何用自然语言查询设备数据，以及 Agent 的完整处理过程。
+> 完整交互规范见 [`docs/interaction.md`](../docs/interaction.md)。
 
 ---
 
