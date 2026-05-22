@@ -25,7 +25,7 @@
 
 | 平台 | 安装方式 | 卸载 |
 |------|---------|------|
-| **OpenClaw** | `clawhub skill install insentek-api-skill` | `clawhub skill remove insentek-api-skill` |
+| **OpenClaw** | `openclaw skills install insentek-api-skill` | `openclaw skills install insentek-api-skill` |
 | **Claude Code** | 项目根目录放 `skill.md` 或 `/load skill.md` | 删除文件或 `/clear` |
 | **ChatGPT** | GPTs Instructions 粘贴 / Actions Schema 导入 | Delete GPT / 删除 Action |
 | **Hermes-Agent** | `~/.hermes/skills/` 目录下放 skill 文件 | `rm` 文件后 `reload` |
