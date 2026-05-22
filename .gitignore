@@ -1,6 +1,8 @@
 # Claude local settings
 .claude/
 
+.planning/
+
 # Temporary analysis reports generated during sessions
 *_report_*.html
 analysis_*.html
