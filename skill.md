@@ -1,6 +1,6 @@
 ---
 name: insentek-openapi
-version: 1.1.0
+version: 1.2.0
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
@@ -43,18 +43,24 @@ guardrails:
 
 用户首次提供 appid/secret 时调用，或缓存凭据失效时。
 
-```json
-{
-  "appid": { "type": "string", "description": "E 生态应用 ID" },
-  "secret": { "type": "string", "description": "E 生态应用密钥" }
-}
+**方式一：持久化配置（推荐）**
+```bash
+# 配置并保存（仅需一次）
+python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret} --save
+
+# 查看状态
+python scripts/insentek_cli.py auth --status
+
+# 清除配置
+python scripts/insentek_cli.py auth --clear
 ```
 
+**方式二：临时获取 token**
 ```bash
 python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
 ```
 
-成功后缓存 `appid`, `secret`, `token`, `expires_at` 到会话内存。同一会话不再询问。
+成功后输出 token。若使用 `--save`，凭据保存到 `~/.config/insentek/credentials.json`，后续所有命令无需再传 `--token`。
 
 ---
 
@@ -73,10 +79,12 @@ python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
 
 ```bash
 # 列表
-python scripts/insentek_cli.py devices --token ${token} --page ${page} --limit ${limit}
+python scripts/insentek_cli.py devices [--token ${token}] [--page ${page}] [--limit ${limit}]
 # 详情
-python scripts/insentek_cli.py device --token ${token} --sn ${sn}
+python scripts/insentek_cli.py device [--token ${token}] --sn ${sn}
 ```
+
+**注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
 
 **行为：** alias → 模糊匹配 → 多匹配时反问用户 → 单匹配时缓存 alias→sn 映射。
 
@@ -97,14 +105,16 @@ python scripts/insentek_cli.py device --token ${token} --sn ${sn}
 
 ```bash
 # 历史数据
-python scripts/insentek_cli.py data --token ${token} --sn ${sn} --range ${range} [--include-params ${params}]
+python scripts/insentek_cli.py data [--token ${token}] --sn ${sn} --range ${range} [--include-params ${params}]
 
 # 预览（调试/验证用）
-python scripts/insentek_cli.py data --token ${token} --sn ${sn} --range ${range} --dry-run
+python scripts/insentek_cli.py data [--token ${token}] --sn ${sn} --range ${range} --dry-run
 
 # 实时数据（latest）— 允许直接用 curl
  curl -s -H "Authorization: ${token}" "http://openapi.ecois.info/v3/device/${sn}/latest"
 ```
+
+**注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
 
 时间表达式解析见 `docs/interaction.md` Section 2。
 
@@ -116,14 +126,16 @@ python scripts/insentek_cli.py data --token ${token} --sn ${sn} --range ${range}
 
 ```bash
 # CSV
-python scripts/insentek_cli.py export --token ${token} --sn ${sn} --range ${range} --format csv --output ${file}.csv
+python scripts/insentek_cli.py export [--token ${token}] --sn ${sn} --range ${range} --format csv --output ${file}.csv
 
 # Excel
-python scripts/export_excel.py --token ${token} --sn ${sn} --range ${range} --output ${file}.xlsx
+python scripts/export_excel.py [--token ${token}] --sn ${sn} --range ${range} --output ${file}.xlsx
 
 # JSON
-python scripts/insentek_cli.py export --token ${token} --sn ${sn} --range ${range} --format json --output ${file}.json
+python scripts/insentek_cli.py export [--token ${token}] --sn ${sn} --range ${range} --format json --output ${file}.json
 ```
+
+**注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
 
 所有导出脚本均支持 `--dry-run`。
 
@@ -184,22 +196,48 @@ Agent **禁止**将原始传感器全量数据输出到对话中。
 
 ## 4. Authentication
 
-会话内存中维护：`cached_appid`, `cached_secret`, `cached_token`, `token_expires_at`。
+### 4.1 持久化凭据（推荐）
 
-```
-IF token 有效 (>300s 剩余):
-  → 直接使用
-ELIF token 即将过期 (≤300s):
-  → 自动刷新（用户无感知）
-ELIF 有缓存凭据但 token 失效:
-  → 静默重新获取
-ELSE:
-  → 询问 appid/secret → 获取 token → 缓存
+首次使用时配置凭据，后续自动读取：
+
+```bash
+# 配置并保存凭据（仅需执行一次）
+python scripts/insentek_cli.py auth --appid xxx --secret yyy --save
+
+# 查看当前配置状态
+python scripts/insentek_cli.py auth --status
+
+# 清除配置
+python scripts/insentek_cli.py auth --clear
 ```
 
-- Secret **绝不**输出到对话，**绝不**写入磁盘
-- Token 仅缓存于会话内存，会话结束自动清除
-- `expires` 通常为 7200s，过期前 300s 自动刷新
+凭据存储在 `~/.config/insentek/credentials.json`，文件权限 600（仅所有者可读写）。
+
+### 4.2 命令行传参（临时/多账号场景）
+
+```bash
+python scripts/insentek_cli.py auth --appid xxx --secret yyy
+```
+
+命令行参数优先级高于配置文件，便于临时覆盖或多账号切换。
+
+### 4.3 Token 自动管理
+
+脚本自动处理 token 生命周期：
+- 各命令 `--token` 参数变为可选
+- 未提供 `--token` 时，自动从配置读取凭据并获取 token
+- 无需 Agent 在会话内存中缓存凭据
+
+### 4.4 安全说明
+
+- Secret **绝不**输出到对话
+- 配置文件权限 600，仅所有者可读写
+- Token 按需获取，不长期存储
+- `authenticate` 命令返回 token 供一次性使用，或让脚本自动管理
+
+---
+
+**向后兼容：** 所有命令仍支持 `--token` 参数，现有调用方式不受影响。
 
 ---
 
