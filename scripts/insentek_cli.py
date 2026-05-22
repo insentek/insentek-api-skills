@@ -200,7 +200,7 @@ def pivot_data(api_response, sn):
         values = item.get("values", {})
         for node, params in values.items():
             row = {
-                "SN": f"{sn}",
+                "SN": f"\t{sn}",
                 "datetime": dt,
                 "node": node,
             }
