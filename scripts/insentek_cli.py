@@ -49,10 +49,11 @@ MAX_EXPORT_ROWS = 50000
 DRY_RUN_PREVIEW_ROWS = 5
 
 
-def api_request(path, headers=None, params=None, method="GET", data=None, retry_auth=True):
+def api_request(path, headers=None, params=None, method="GET", data=None, retry_auth=True, _refreshed=False):
     """
     发送 HTTP 请求并返回 JSON 响应。
     如果返回 401/403 且 retry_auth=True，会自动刷新 token 并重试一次。
+    _refreshed 为内部标记，防止无限循环。
     """
     url = f"{API_BASE_URL}{path}"
     if params:
@@ -71,13 +72,13 @@ def api_request(path, headers=None, params=None, method="GET", data=None, retry_
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         # 认证失败，尝试刷新 token 后重试一次
-        if retry_auth and e.code in (401, 403):
+        if retry_auth and e.code in (401, 403) and not _refreshed:
             new_token = refresh_token()
             if new_token:
                 # 替换 header 中的 token 并重试
                 if headers and "Authorization" in headers:
                     headers["Authorization"] = new_token
-                return api_request(path, headers=headers, params=params, method=method, data=data, retry_auth=False)
+                return api_request(path, headers=headers, params=params, method=method, data=data, retry_auth=False, _refreshed=True)
         body = e.read().decode("utf-8")
         try:
             err = json.loads(body)
@@ -105,11 +106,11 @@ def save_credentials(appid, secret, token=None):
     data = {
         "appid": appid,
         "secret": secret,
-        "created_at": datetime.utcnow().isoformat() + "Z"
+        "created_at": datetime.now(datetime.now().astimezone().tzinfo).isoformat()
     }
     if token:
         data["token"] = token
-        data["token_updated_at"] = datetime.utcnow().isoformat() + "Z"
+        data["token_updated_at"] = datetime.now(datetime.now().astimezone().tzinfo).isoformat()
     with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     # 设置文件权限为 600（仅所有者可读写）
@@ -123,7 +124,7 @@ def update_token(token):
     if not creds:
         return None
     creds["token"] = token
-    creds["token_updated_at"] = datetime.utcnow().isoformat() + "Z"
+    creds["token_updated_at"] = datetime.now(datetime.now().astimezone().tzinfo).isoformat()
     with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
         json.dump(creds, f, ensure_ascii=False, indent=2)
     os.chmod(CREDENTIALS_FILE, stat.S_IRUSR | stat.S_IWUSR)
@@ -187,6 +188,7 @@ def get_token(appid=None, secret=None):
     策略：
     1. 优先使用配置文件中的缓存 token
     2. 如果没有缓存 token，或缓存 token 为空，则获取新 token 并保存
+    3. 如果缓存 token 使用失败（401/403），会自动刷新
     """
     creds = get_credentials(appid, secret)
     if not creds:
