@@ -240,11 +240,11 @@ python scripts/insentek_cli.py auth --appid xxx --secret ***
   └── 401/403 → 调用 /v3/token 获取新 token → 更新配置文件 → 重试请求
 ```
 
-### 4.4 安全说明
+### 4.5 安全说明
 
 - Secret **绝不**输出到对话
 - 配置文件权限 600，仅所有者可读写
-- Token 按需临时获取，不长期存储
+- Token 缓存有效期约 2 小时，靠 HTTP 401/403 触发自动刷新
 - `authenticate` 命令返回 token 供一次性使用，或让脚本自动管理
 
 ---
