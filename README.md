@@ -47,7 +47,7 @@ npx @insentek/openapi-skill info
 OpenClaw 用户也可通过 ClawHub 单独安装（与本 CLI 无关）：
 
 ```bash
-clawhub skill install insentek-api-skill
+openclaw skills install insentek-api-skill
 ```
 
 | 命令 | 说明 |
