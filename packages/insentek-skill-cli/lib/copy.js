@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { ASSET_ENTRIES, ASSETS_DIR } from './constants.js';
 import { ensureDir, pathExists, removeDir } from './utils.js';
@@ -34,6 +35,57 @@ async function copyEntry(sourceRoot, entryName, targetRoot) {
   }
 }
 
+async function copyAssetsFromSource(sourceRoot, targetRoot) {
+  await ensureDir(targetRoot);
+  for (const entry of ASSET_ENTRIES) {
+    await copyEntry(sourceRoot, entry, targetRoot);
+  }
+}
+
+function buildSidecarDir(targetDir, suffix) {
+  return path.join(
+    path.dirname(targetDir),
+    `${path.basename(targetDir)}.${suffix}-${process.pid}-${Date.now()}`,
+  );
+}
+
+async function cleanupSidecarDir(dirPath) {
+  if (dirPath && await pathExists(dirPath)) {
+    await removeDir(dirPath);
+  }
+}
+
+export async function replaceDirectoryAtomic(sourceRoot, targetDir) {
+  const stagingDir = buildSidecarDir(targetDir, 'staging');
+  let backupDir = null;
+
+  try {
+    await copyAssetsFromSource(sourceRoot, stagingDir);
+
+    const hadExisting = await pathExists(targetDir);
+    if (hadExisting) {
+      backupDir = buildSidecarDir(targetDir, 'backup');
+      await fs.rename(targetDir, backupDir);
+    }
+
+    await fs.rename(stagingDir, targetDir);
+    await cleanupSidecarDir(backupDir);
+  } catch (error) {
+    await cleanupSidecarDir(stagingDir);
+
+    if (backupDir && await pathExists(backupDir)) {
+      if (!(await pathExists(targetDir))) {
+        await fs.rename(backupDir, targetDir);
+      } else {
+        await cleanupSidecarDir(targetDir);
+        await fs.rename(backupDir, targetDir);
+      }
+    }
+
+    throw error;
+  }
+}
+
 export async function copySkillAssets(targetDir, { force = false } = {}) {
   if (!(await pathExists(ASSETS_DIR))) {
     throw new Error(
@@ -41,16 +93,15 @@ export async function copySkillAssets(targetDir, { force = false } = {}) {
     );
   }
 
-  if (await pathExists(targetDir)) {
-    if (!force) {
-      throw new Error(`Target already exists: ${targetDir}. Use --force to overwrite.`);
-    }
-    await removeDir(targetDir);
+  const exists = await pathExists(targetDir);
+  if (exists && !force) {
+    throw new Error(`Target already exists: ${targetDir}. Use --force to overwrite.`);
   }
 
-  await ensureDir(targetDir);
-
-  for (const entry of ASSET_ENTRIES) {
-    await copyEntry(ASSETS_DIR, entry, targetDir);
+  if (exists && force) {
+    await replaceDirectoryAtomic(ASSETS_DIR, targetDir);
+    return;
   }
+
+  await copyAssetsFromSource(ASSETS_DIR, targetDir);
 }

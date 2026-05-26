@@ -23,18 +23,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync skill assets
-        run: npm run sync-assets
-
-      - name: Run tests
-        run: npm test
-
       - name: Align package version with release tag
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
           npm version "$VERSION" --no-git-tag-version
+
+      - name: Sync skill assets
+        run: npm run sync-assets
+
+      - name: Run tests
+        run: npm test
 
       - name: Publish to npm
         env:

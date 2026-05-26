@@ -43,6 +43,9 @@ clawhub skill remove insentek-api-skill
 |--------|-------------|
 | `-r, --runtime` | `claude`, `openclaw`, `all` |
 | `-s, --scope` | 见下方 Scope 说明 |
+| `-f, --force` | 覆盖已有安装 |
+| `-y, --yes` | 非交互（需配合 `-r`） |
+| `--json` | 输出 JSON（`install`/`update`/`uninstall` 需配合 `-y`） |
 
 ### Scope 说明
 
@@ -52,8 +55,6 @@ clawhub skill remove insentek-api-skill
 | OpenClaw | `global`, `project`, `workspace` |
 
 `workspace` 仅 OpenClaw 支持；Claude Code 没有 workspace 概念。
-| `-f, --force` | 覆盖已有安装 |
-| `-y, --yes` | 非交互（需配合 `-r`） |
 
 ## Examples
 
@@ -71,6 +72,11 @@ npx @insentek/openapi-skill install -r openclaw -s workspace -y
 npx @insentek/openapi-skill update -r claude -y
 npx @insentek/openapi-skill doctor
 npx @insentek/openapi-skill info
+
+# 脚本 / CI 使用 JSON 输出
+npx @insentek/openapi-skill status -r claude --json
+npx @insentek/openapi-skill install -r claude -s global -y --json
+npx @insentek/openapi-skill doctor --json
 ```
 
 ## Development / 本地测试

@@ -96,11 +96,13 @@ async function checkRuntimeInstall(runtimeId, scope, context) {
   return checks;
 }
 
-export async function runDoctor({ runtimeIds, scope, context }) {
+export async function runDoctor({ runtimeIds, scope, context, silent = false }) {
   const checks = [];
   let allPassed = true;
 
-  printInfo('Running doctor checks...');
+  if (!silent) {
+    printInfo('Running doctor checks...');
+  }
 
   try {
     const bundled = await checkBundledAssets();
@@ -143,20 +145,21 @@ export async function runDoctor({ runtimeIds, scope, context }) {
     checks.push(...runtimeChecks);
   }
 
-  console.log('\nDoctor report:\n');
-  for (const check of checks) {
-    const icon = check.ok ? '✔' : '✖';
-    console.log(`  ${icon} ${check.name}: ${check.message}`);
-    if (!check.ok) {
-      allPassed = false;
-    }
-  }
+  allPassed = checks.every((check) => check.ok);
 
-  console.log('');
-  if (allPassed) {
-    printSuccess('All doctor checks passed');
-  } else {
-    printWarn('Some doctor checks failed');
+  if (!silent) {
+    console.log('\nDoctor report:\n');
+    for (const check of checks) {
+      const icon = check.ok ? '✔' : '✖';
+      console.log(`  ${icon} ${check.name}: ${check.message}`);
+    }
+
+    console.log('');
+    if (allPassed) {
+      printSuccess('All doctor checks passed');
+    } else {
+      printWarn('Some doctor checks failed');
+    }
   }
 
   return { allPassed, checks };

@@ -15,6 +15,16 @@ import {
 import { findWorkspaceRoot } from './core/resolver.js';
 import { detectOS, getOSLabel } from './os.js';
 import {
+  assertNonInteractive,
+  buildInfoPayload,
+  getJsonFlag,
+  serializeInstallResult,
+  serializeStatus,
+  serializeUninstallResult,
+  serializeUpdateResult,
+  writeJson,
+} from './output.js';
+import {
   getRuntimeOptionHelp,
   resolveInstallLocation,
   resolveRuntimeIds,
@@ -41,6 +51,32 @@ function buildOptions(opts, runtimeIds = []) {
     force: opts.force,
     yes: opts.yes,
   };
+}
+
+function resolveDoctorRuntimeIds(defaults) {
+  const runtimeIds = defaults.runtime
+    ? resolveRuntimeIds(defaults.runtime)
+    : RUNTIME_IDS.filter((id) => getScopesForRuntime(id).includes(defaults.scope));
+  if (defaults.runtime) {
+    validateScopeForRuntimes(runtimeIds, defaults.scope);
+  } else if (runtimeIds.length === 0) {
+    throw new Error(`Scope "${defaults.scope}" is not supported by any runtime.`);
+  }
+  return runtimeIds;
+}
+
+function resolveStatusRuntimeIds(defaults) {
+  const runtimeIds = defaults.runtime ? resolveRuntimeIds(defaults.runtime) : RUNTIME_IDS;
+  if (defaults.runtime) {
+    validateScopeForRuntimes(runtimeIds, defaults.scope);
+  }
+  const compatibleRuntimeIds = runtimeIds.filter((runtimeId) => (
+    getScopesForRuntime(runtimeId).includes(defaults.scope)
+  ));
+  if (compatibleRuntimeIds.length === 0) {
+    throw new Error(`Scope "${defaults.scope}" is not supported for selected runtime(s).`);
+  }
+  return compatibleRuntimeIds;
 }
 
 async function promptRuntimeSelection(message = 'Select AI agent runtime') {
@@ -132,6 +168,31 @@ function printWelcome() {
   console.log('Install locations are resolved dynamically per runtime/scope.\n');
 }
 
+async function runDoctorCommand(defaults, context, json) {
+  const runtimeIds = resolveDoctorRuntimeIds(defaults);
+  const result = await runDoctor({
+    runtimeIds,
+    scope: defaults.scope,
+    context,
+    silent: json,
+  });
+
+  if (json) {
+    writeJson({
+      ok: result.allPassed,
+      command: 'doctor',
+      scope: defaults.scope,
+      runtimeIds,
+      allPassed: result.allPassed,
+      checks: result.checks,
+    });
+  }
+
+  if (!result.allPassed) {
+    process.exitCode = 1;
+  }
+}
+
 export async function runCli(argv) {
   const program = new Command();
   const runtimeHelp = getRuntimeOptionHelp();
@@ -140,6 +201,7 @@ export async function runCli(argv) {
   program
     .name(CLI_NAME)
     .description('Bootstrap insentek-openapi skill for OpenClaw and Claude Code')
+    .option('--json', 'Output machine-readable JSON to stdout', false)
     .version(pkg.version, '-V, --version', 'Show package version');
 
   program
@@ -149,8 +211,14 @@ export async function runCli(argv) {
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
     .option('-f, --force', 'Overwrite existing installation', false)
     .option('-y, --yes', 'Skip prompts (requires --runtime)', false)
-    .action(async (opts) => {
-      printWelcome();
+    .action(async (opts, command) => {
+      const json = getJsonFlag(command);
+      assertNonInteractive(json, opts.yes, 'install');
+
+      if (!json) {
+        printWelcome();
+      }
+
       const defaults = buildOptions(opts);
       const context = buildCommandContext();
       let finalOptions;
@@ -162,8 +230,21 @@ export async function runCli(argv) {
         finalOptions = await promptInstallOptions(defaults);
       }
 
-      printInfo(`Installing ${SKILL_ID} v${pkg.version}...`);
-      const results = await installSkills({ ...finalOptions, context });
+      if (!json) {
+        printInfo(`Installing ${SKILL_ID} v${pkg.version}...`);
+      }
+
+      const results = await installSkills({ ...finalOptions, context, silent: json });
+
+      if (json) {
+        writeJson({
+          ok: true,
+          command: 'install',
+          results: results.map(serializeInstallResult),
+        });
+        return;
+      }
+
       printInstallSummary(results);
     });
 
@@ -173,7 +254,10 @@ export async function runCli(argv) {
     .option('-r, --runtime <names>', `Runtime: ${runtimeHelp}`)
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
     .option('-y, --yes', 'Skip prompts (requires --runtime)', false)
-    .action(async (opts) => {
+    .action(async (opts, command) => {
+      const json = getJsonFlag(command);
+      assertNonInteractive(json, opts.yes, 'update');
+
       const defaults = buildOptions(opts);
       const context = buildCommandContext();
       const runtimeIds = await resolveRuntimeIdsFromOptions({
@@ -183,8 +267,26 @@ export async function runCli(argv) {
       });
       validateScopeForRuntimes(runtimeIds, defaults.scope);
 
-      printInfo(`Updating ${SKILL_ID}...`);
-      const results = await updateSkills({ runtimeIds, scope: defaults.scope, context });
+      if (!json) {
+        printInfo(`Updating ${SKILL_ID}...`);
+      }
+
+      const results = await updateSkills({
+        runtimeIds,
+        scope: defaults.scope,
+        context,
+        silent: json,
+      });
+
+      if (json) {
+        writeJson({
+          ok: true,
+          command: 'update',
+          results: results.map(serializeUpdateResult),
+        });
+        return;
+      }
+
       printUpdateSummary(results);
     });
 
@@ -194,7 +296,10 @@ export async function runCli(argv) {
     .option('-r, --runtime <names>', `Runtime: ${runtimeHelp}`)
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
     .option('-y, --yes', 'Skip prompts (requires --runtime)', false)
-    .action(async (opts) => {
+    .action(async (opts, command) => {
+      const json = getJsonFlag(command);
+      assertNonInteractive(json, opts.yes, 'uninstall');
+
       const defaults = buildOptions(opts);
       const context = buildCommandContext();
       const runtimeIds = await resolveRuntimeIdsFromOptions({
@@ -210,12 +315,29 @@ export async function runCli(argv) {
           default: false,
         });
         if (!confirmed) {
-          printInfo('Cancelled.');
+          if (json) {
+            writeJson({ ok: true, command: 'uninstall', cancelled: true, results: [] });
+          } else {
+            printInfo('Cancelled.');
+          }
           return;
         }
       }
 
-      await uninstallSkills({ runtimeIds, scope: defaults.scope, context });
+      const results = await uninstallSkills({
+        runtimeIds,
+        scope: defaults.scope,
+        context,
+        silent: json,
+      });
+
+      if (json) {
+        writeJson({
+          ok: true,
+          command: 'uninstall',
+          results: results.map(serializeUninstallResult),
+        });
+      }
     });
 
   program
@@ -223,26 +345,27 @@ export async function runCli(argv) {
     .description('Show installation status')
     .option('-r, --runtime <names>', `Runtime: ${runtimeHelp}`)
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
-    .action(async (opts) => {
+    .action(async (opts, command) => {
+      const json = getJsonFlag(command);
       const defaults = buildOptions(opts);
       const context = buildCommandContext();
-      const runtimeIds = defaults.runtime ? resolveRuntimeIds(defaults.runtime) : RUNTIME_IDS;
-      if (defaults.runtime) {
-        validateScopeForRuntimes(runtimeIds, defaults.scope);
-      }
-      const compatibleRuntimeIds = runtimeIds.filter((runtimeId) => (
-        getScopesForRuntime(runtimeId).includes(defaults.scope)
-      ));
-      if (compatibleRuntimeIds.length === 0) {
-        throw new Error(
-          `Scope "${defaults.scope}" is not supported for selected runtime(s).`,
-        );
-      }
+      const runtimeIds = resolveStatusRuntimeIds(defaults);
       const statuses = await getStatuses({
-        runtimeIds: compatibleRuntimeIds,
+        runtimeIds,
         scope: defaults.scope,
         context,
       });
+
+      if (json) {
+        writeJson({
+          ok: true,
+          command: 'status',
+          scope: defaults.scope,
+          results: statuses.map(serializeStatus),
+        });
+        return;
+      }
+
       printStatusTable(statuses);
     });
 
@@ -251,36 +374,26 @@ export async function runCli(argv) {
     .description('Diagnose runtime paths, manifest, scripts and environment')
     .option('-r, --runtime <names>', `Runtime: ${runtimeHelp}`)
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
-    .action(async (opts) => {
+    .action(async (opts, command) => {
       const defaults = buildOptions(opts);
-      const context = buildCommandContext();
-      const runtimeIds = defaults.runtime
-        ? resolveRuntimeIds(defaults.runtime)
-        : RUNTIME_IDS.filter((id) => getScopesForRuntime(id).includes(defaults.scope));
-      if (defaults.runtime) {
-        validateScopeForRuntimes(runtimeIds, defaults.scope);
-      } else if (runtimeIds.length === 0) {
-        throw new Error(`Scope "${defaults.scope}" is not supported by any runtime.`);
-      }
-      const result = await runDoctor({
-        runtimeIds,
-        scope: defaults.scope,
-        context,
-      });
-
-      if (!result.allPassed) {
-        process.exitCode = 1;
-      }
+      await runDoctorCommand(defaults, buildCommandContext(), getJsonFlag(command));
     });
 
   program
     .command('info')
     .description('Show package, skill manifest and resolved install locations')
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
-    .action((opts) => {
-      printWelcome();
-      const defaults = buildOptions(opts);
+    .action((opts, command) => {
+      const json = getJsonFlag(command);
       const context = buildCommandContext();
+
+      if (json) {
+        writeJson(buildInfoPayload(context));
+        return;
+      }
+
+      printWelcome();
+      buildOptions(opts);
       console.log('Supported runtimes:\n');
       for (const id of RUNTIME_IDS) {
         console.log(`  ${RUNTIMES[id].label}:`);
@@ -301,26 +414,9 @@ export async function runCli(argv) {
     .description('Alias of doctor')
     .option('-r, --runtime <names>', `Runtime: ${runtimeHelp}`)
     .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
-    .action(async (opts) => {
+    .action(async (opts, command) => {
       const defaults = buildOptions(opts);
-      const context = buildCommandContext();
-      const runtimeIds = defaults.runtime
-        ? resolveRuntimeIds(defaults.runtime)
-        : RUNTIME_IDS.filter((id) => getScopesForRuntime(id).includes(defaults.scope));
-      if (defaults.runtime) {
-        validateScopeForRuntimes(runtimeIds, defaults.scope);
-      } else if (runtimeIds.length === 0) {
-        throw new Error(`Scope "${defaults.scope}" is not supported by any runtime.`);
-      }
-      const result = await runDoctor({
-        runtimeIds,
-        scope: defaults.scope,
-        context,
-      });
-
-      if (!result.allPassed) {
-        process.exitCode = 1;
-      }
+      await runDoctorCommand(defaults, buildCommandContext(), getJsonFlag(command));
     });
 
   await program.parseAsync(argv);

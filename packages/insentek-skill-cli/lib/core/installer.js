@@ -9,12 +9,15 @@ export async function installSkill({
   scope,
   context = {},
   force = false,
+  silent = false,
 }) {
   validateScopeForRuntime(runtimeId, scope);
   const runtime = RUNTIMES[runtimeId];
   const location = resolveInstallLocation(runtimeId, scope, context);
   await copySkillAssets(location.installDir, { force });
-  printSuccess(`${runtime.label} skill installed at ${formatPath(location.installDir)}`);
+  if (!silent) {
+    printSuccess(`${runtime.label} skill installed at ${formatPath(location.installDir)}`);
+  }
   return {
     runtimeId,
     scope,
@@ -24,10 +27,10 @@ export async function installSkill({
   };
 }
 
-export async function installSkills({ runtimeIds, scope, context, force = false }) {
+export async function installSkills({ runtimeIds, scope, context, force = false, silent = false }) {
   const results = [];
   for (const runtimeId of runtimeIds) {
-    results.push(await installSkill({ runtimeId, scope, context, force }));
+    results.push(await installSkill({ runtimeId, scope, context, force, silent }));
   }
   return results;
 }
@@ -43,10 +46,10 @@ export async function updateSkill(options) {
   };
 }
 
-export async function updateSkills({ runtimeIds, scope, context }) {
+export async function updateSkills({ runtimeIds, scope, context, silent = false }) {
   const results = [];
   for (const runtimeId of runtimeIds) {
-    results.push(await updateSkill({ runtimeId, scope, context }));
+    results.push(await updateSkill({ runtimeId, scope, context, silent }));
   }
   return results;
 }
