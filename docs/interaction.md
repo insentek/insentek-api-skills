@@ -18,7 +18,7 @@
 
 请在终端运行：
 
-npx insentek-api-skill login
+npx @insentek/openapi-skill login
 
 按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。
 ```
@@ -27,9 +27,9 @@ npx insentek-api-skill login
 
 ### 0.1 脚本路径（与 `skill.md` Section 2 一致）
 
-- API 调用用 `python ${SKILL_ROOT}/scripts/insentek_cli.py`，**禁止**相对路径 `scripts/...`
-- 首次调用前或 ENOENT：`npx @insentek/openapi-skill status -r openclaw -s workspace --json`，读 `installDir` / `scripts.cli`
-- 文件找不到时 **禁止**乱试 `npx insentek-api-skill devices` 等命令
+- API 调用用 `${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py`，其中 `${PYTHON}` 来自 `info --json` 的 `python.command`（缺省 `python3`），**禁止**相对路径 `scripts/...`
+- 首次调用前或 ENOENT：`npx @insentek/openapi-skill info --json`，遍历 `runtimes[].scopes[]` 挑选 `installed: true` 的条目，读取 `installDir` / `scripts.cli` / `python.command`
+- npm registry 上不存在 `insentek-api-skill` 包，**禁止**使用 `npx insentek-api-skill ...`
 
 ---
 

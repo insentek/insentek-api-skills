@@ -48,11 +48,11 @@ npx @insentek/openapi-skill login
 #### 方式二：从 ClawHub 安装
 
 ```bash
-# 安装最新版本
+# 安装最新版本（slug 见 .github/workflows/publish.yml）
 clawhub skill install insentek-api-skill
 
 # 安装指定版本
-clawhub skill install insentek-api-skill@1.1.0
+clawhub skill install insentek-api-skill@1.2.1
 
 # 从 ClawHub 搜索确认
 clawhub skill search insentek
@@ -60,27 +60,31 @@ clawhub skill search insentek
 
 安装完成后，skill 会自动注册到 OpenClaw 的技能列表中。
 
-#### 方式二：本地文件安装
+> 注意：ClawHub 上的 slug 是 `insentek-api-skill`，但 skill 本身的 id（`skill.json` / SKILL.md frontmatter 中的 `name`）始终是 `insentek-openapi`。两者均合法，只是用途不同。
+
+#### 方式三：本地文件安装
 
 ```bash
-# 从本地 skill.md 安装
-clawhub skill add ./skill.md
+# 从本地 SKILL.md 安装
+clawhub skill add ./SKILL.md
 
 # 或使用绝对路径
-clawhub skill add /path/to/skill.md
+clawhub skill add /path/to/SKILL.md
 ```
 
-#### 方式三：Web UI 安装
+#### 方式四：Web UI 安装
 
 1. 打开 OpenClaw 客户端，进入 **Skills** 页面
 2. 点击 **Import Skill** → 选择文件
-3. 选择项目根目录的 `skill.md` 文件
+3. 选择项目根目录的 `SKILL.md` 文件
 4. 确认导入
 
 ### 卸载
 
 ```bash
-# CLI 卸载
+# CLI 卸载（npm 包安装方式）
+npx @insentek/openapi-skill uninstall -r openclaw -s workspace -y
+# 或 ClawHub 安装方式
 clawhub skill remove insentek-api-skill
 ```
 

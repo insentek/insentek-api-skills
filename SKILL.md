@@ -47,37 +47,45 @@ npx @insentek/openapi-skill logout      # 清除
 npx @insentek/openapi-skill auth status # 查看连接状态
 ```
 
-> npm 包名为 `@insentek/openapi-skill`，CLI 命令为 `insentek-api-skill`，两者等价。
+> npm 包名为 `@insentek/openapi-skill`（已发布到 npm registry）。`insentek-api-skill` 是它的可执行别名，**仅在该包已被安装时**可用。**所有 `npx` 调用都应使用 scoped 包名** `@insentek/openapi-skill`，否则未安装的用户机器会得到 "npm ERR! 404"。
 
 ### 命令分工（MUST）
 
 | 用途 | 工具 | 示例 |
 |------|------|------|
 | 安装 / 更新 skill | `npx @insentek/openapi-skill` | `install -r openclaw -s workspace -y` |
-| 配置 / 清除凭据 | `npx insentek-api-skill login/logout/auth` | `npx insentek-api-skill login` |
-| 查安装路径 / 脚本位置 | `npx insentek-api-skill info/status/doctor --json` | 见下方「脚本路径解析」 |
-| **查询 API** | `python <SKILL_ROOT>/scripts/insentek_cli.py` | `python .../insentek_cli.py devices` |
+| 配置 / 清除凭据 | `npx @insentek/openapi-skill login/logout` | `npx @insentek/openapi-skill login` |
+| 查连接状态 | `npx @insentek/openapi-skill auth status` | — |
+| 查安装路径 / 脚本位置 | `npx @insentek/openapi-skill info/status/doctor --json` | 见下方「脚本路径解析」 |
+| **查询 API** | `python3 <SKILL_ROOT>/scripts/insentek_cli.py` | `python3 .../insentek_cli.py devices` |
 
 ### 脚本路径解析（MUST，API 调用前）
 
-Agent 工作目录通常**不是** skill 安装目录。**禁止**使用相对路径 `python scripts/insentek_cli.py ...`。
+Agent 工作目录通常**不是** skill 安装目录。**禁止**使用相对路径 `python3 scripts/insentek_cli.py ...`。
 
-**首次 API 调用前**，或脚本路径未知 / 返回「文件找不到」时，**必须先**查实际安装位置：
+**首次 API 调用前**，或脚本路径未知 / 返回「文件找不到」时，**必须先**查实际安装位置。`info --json` 会列出所有 runtime × scope 的解析结果及 `installed` 标记，无需提前知道用户是哪种安装：
+
+```bash
+npx @insentek/openapi-skill info --json
+```
+
+从输出中遍历 `runtimes[].scopes[]`，挑选第一个 `installed: true` 的条目，将其 `installDir` 作为 `${SKILL_ROOT}`，将 `scripts.cli` / `scripts.exportExcel` / `scripts.writeHtml` 作为脚本绝对路径，并将 `python.command`（如 `python3` / `py` / `python`）作为 `${PYTHON}`。解析后在**本会话内缓存**，后续 API 调用复用，**不要**重复猜测路径。
+
+如果用户已经明确告诉过你 runtime / scope（例如刚刚 `install -r openclaw -s workspace -y`），也可以用 `status --json` 精确查询：
 
 ```bash
 npx @insentek/openapi-skill status -r openclaw -s workspace --json
-# 或 info --json / doctor --json
+# 或 -r claude -s global / -s project，按用户场景选择
 ```
 
-从 JSON 读取 `results[].installDir` 作为 `${SKILL_ROOT}`，或直接使用 `results[].scripts.cli`。解析后在**本会话内缓存**，后续 API 调用复用，**不要**重复猜测路径。
-
-OpenClaw workspace 常见路径（仅供参考，**以 status/info 返回为准**）：
+OpenClaw workspace 常见路径（仅供参考，**以 info/status 返回为准**）：
 `~/.openclaw/workspace/skills/insentek-openapi`
 
 **禁止（MUST NOT）：**
-- `python scripts/insentek_cli.py ...` — 相对路径在 OpenClaw 等环境下会失败
-- `npx insentek-api-skill devices` — `devices` 不是顶层命令，会误触发 `install`
-- 文件找不到时乱试其他命令 — **应重新 `status --json` 或 `info --json`**
+- `python3 scripts/insentek_cli.py ...` — 相对路径在 OpenClaw 等环境下会失败
+- `npx insentek-api-skill ...` — npm registry 上没有这个包名，对未安装本包的新用户会 404
+- `npx @insentek/openapi-skill devices` — `devices` 不是顶层命令，会被 commander 当成 `install` 的子命令而触发安装流程
+- 文件找不到时乱试其它命令 — **应重新 `info --json`**
 
 用户说「配置好了，继续吧」→ 从**中断前的意图**继续；若已有 `${SKILL_ROOT}` 直接调 API，**不要**重新 login。
 
@@ -88,7 +96,7 @@ OpenClaw workspace 常见路径（仅供参考，**以 status/info 返回为准*
 
 请在终端运行：
 
-npx insentek-api-skill login
+npx @insentek/openapi-skill login
 
 按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。
 ```

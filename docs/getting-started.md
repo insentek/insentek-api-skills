@@ -58,7 +58,7 @@ Agent 会自动读取本地凭据、查询设备列表并返回结果。
 
 请在终端运行：
 
-npx insentek-api-skill login
+npx @insentek/openapi-skill login
 
 按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。
 ```

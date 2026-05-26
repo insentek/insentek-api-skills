@@ -47,7 +47,7 @@ npx @insentek/openapi-skill info
 OpenClaw 用户也可通过 ClawHub 单独安装（与本 CLI 无关）：
 
 ```bash
-openclaw skills install insentek-api-skill
+clawhub skill install insentek-api-skill
 ```
 
 | 命令 | 说明 |
@@ -58,6 +58,17 @@ openclaw skills install insentek-api-skill
 | `uninstall` | 卸载 |
 
 > CLI 源码见 [`packages/insentek-skill-cli/`](packages/insentek-skill-cli/)。路径因 runtime/scope/OS 而异，请用 `info` / `doctor` 查看本机实际位置。
+
+### 命名约定
+
+仓库中涉及三套名字，用途不同，**不要混用**：
+
+| 维度 | 取值 | 用途 |
+|------|------|------|
+| Skill ID（`skill.json` / SKILL.md frontmatter） | `insentek-openapi` | 安装目录名、Agent 内部标识 |
+| ClawHub slug | `insentek-api-skill` | `clawhub skill install <slug>` 时使用 |
+| npm 包名 | `@insentek/openapi-skill` | **所有 `npx` 调用必须使用此名**（registry 上没有 `insentek-api-skill`） |
+| CLI 二进制名 | `insentek-api-skill` | 仅在 `@insentek/openapi-skill` 已安装时作为可执行别名 |
 
 ### 3. 开始对话
 
