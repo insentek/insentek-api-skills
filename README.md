@@ -17,6 +17,16 @@
 
 ## 快速开始
 
+### 前置依赖
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| Node.js | ≥ 18 | 运行 `npx @insentek/openapi-skill` CLI |
+| Python | ≥ 3.10 | 运行 `scripts/insentek_cli.py` 等脚本（脚本使用了 PEP 604 联合类型语法） |
+| openpyxl（可选） | 任意 | 仅当需要 Excel 导出时 |
+
+> macOS / Linux 通常应使用 `python3` 命令调用脚本，不要使用裸 `python`（在新版 macOS 与 Ubuntu/Fedora 上不存在或指向 Python 2）。CLI 的 `info --json` 会输出 `python.command`，Agent 必须以该值作为脚本调用前缀。
+
 ### 1. 获取认证信息
 
 登录 [E 生态](https://cloud.ecois.info)，在「应用管理」中创建应用，获取 `appid` 和 `secret`。
@@ -84,7 +94,8 @@ User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
 
 ```
 .
-├── skill.md                     # 核心技能文件 (Runtime Contract)
+├── SKILL.md                     # 核心技能文件 (Runtime Contract)
+├── skill.json                   # Skill manifest (id / version / runtime)
 ├── docs/
 │   ├── getting-started.md       # 快速开始指南
 │   ├── platform-setup.md        # 各平台配置指南
@@ -97,13 +108,15 @@ User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
 │   ├── reports.md               # 报告生成示例
 │   └── flows.md                 # 核心交互流程示例
 ├── scripts/                     # 参考实现脚本
-│   ├── insentek_cli.py          # 统一 CLI（认证/查询/导出）
+│   ├── insentek_cli.py          # 统一 CLI（认证/查询/实时/导出）
+│   ├── credential_store.py      # 加密凭据读写
 │   ├── export_excel.py          # Excel 导出
+│   ├── write_html.py            # HTML 报告落盘工具
 │   └── README.md                # 脚本使用说明
-├── PLATFORM-TEST.md             # 跨平台测试计划（自检清单）
-└── ref/                         # 参考材料（API 仓库 + 文档）
-    ├── api-repo/                # Spring Boot API 源码
-    └── api-document-latest.pdf  # 官方接口文档
+└── packages/insentek-skill-cli/ # npm 包 @insentek/openapi-skill 源码
+    ├── bin/                     # CLI 二进制入口
+    ├── lib/                     # commander / inquirer 实现
+    └── test/                    # node:test 测试
 ```
 
 ---
@@ -198,9 +211,9 @@ Agent: 🔋 巡检报告 — 2号大棚 2.85V 🔴 过低
 
 ## 版本
 
-- **当前版本**: v1.1.0
+- **当前版本**: v1.2.1
 - **API 版本**: insentek OpenAPI v3
-- **更新日期**: 2026-05-22
+- **更新日期**: 2026-05-26（见 [`CHANGELOG.md`](CHANGELOG.md)）
 
 ---
 
@@ -209,8 +222,8 @@ Agent: 🔋 巡检报告 — 2号大棚 2.85V 🔴 过低
 本项目为内容产出型项目，主要交付物为 `skill.md` 及配套文档。
 
 如需反馈问题或建议：
-1. 检查 [`PLATFORM-TEST.md`](PLATFORM-TEST.md) 确认是否为已知限制
-2. 提交 issue 到项目仓库
+1. 先在本机运行 `npx @insentek/openapi-skill doctor --json` 与 `python3 scripts/insentek_cli.py check` 收集环境信息
+2. 提交 issue 到项目仓库，附上 doctor / check 的 JSON 输出
 
 ---
 

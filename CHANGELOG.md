@@ -1,6 +1,42 @@
 Changelog
 =========
 
+[Unreleased]
+------------
+
+Changed
+-------
+
+- **统一 `npx` 调用为 scoped 包名 `@insentek/openapi-skill`**
+  - `NOT_CONNECTED_MESSAGE`（Python + Node 两份）、SKILL.md 固定文案、`docs/interaction.md`、`docs/getting-started.md` 中所有 `npx insentek-api-skill ...` 改为 `npx @insentek/openapi-skill ...`，避免未安装包的新用户被引导执行不存在的 npm 包名
+  - README 新增「命名约定」表，说明 Skill ID / ClawHub slug / npm 包名 / CLI 二进制名各自用途
+  - SKILL.md MUST NOT 列表更正描述：`npx insentek-api-skill ...` 实际会以 npm 404 失败，而 `npx @insentek/openapi-skill devices` 才是会误触 `install` 默认命令的形态
+
+- **`python3` 显式化 + JSON 中暴露 `python.command`**
+  - SKILL.md / docs 中所有 `python ${SKILL_ROOT}/...` 改为 `${PYTHON} ${SKILL_ROOT}/...`，并明确 `${PYTHON}` 来自 `npx @insentek/openapi-skill info --json` 的 `python.command`（macOS/Linux 默认 `python3`，Windows 默认 `python` / `py`）
+  - `lib/output.js` 的 `serializeStatus` / `serializeInstallLocation` / `buildInfoPayload` 输出新增 `python` 对象（`ok` / `command` / `version`），每个 scope 条目还额外暴露 `installed` 布尔，让 Agent 通过 `info --json` 一次性发现安装位置而无需先猜 runtime/scope
+  - `scripts/insentek_cli.py` 的 `check` 把 Python 最低版本要求从 `>=3.8` 修正为 `>=3.10`（脚本实际使用了 PEP 604 `int | None` 联合类型，3.10 之前会语法错误）；同时 doctor 的 Python 检测 message 同步更新
+  - SKILL.md 新增 Python 未安装时的固定引导文案，让 Agent 不要在无 Python 环境下反复尝试
+
+- **所有 API 调用切换到 HTTPS**
+  - 默认 `API_BASE_URL` 从 `http://openapi.ecois.info` 改为 `https://openapi.ecois.info`（`scripts/insentek_cli.py` / `scripts/export_excel.py` / `lib/core/credentials.js` / SKILL.md frontmatter / README / docs / `reference/api-doc.md` 16 处）
+  - `docs/platform-setup.md` 的环境变量示例顺手修正：`INSENTEK_BASE_URL` → `INSENTEK_API_BASE`（脚本实际读取的变量名）
+
+Added
+-----
+
+- **`latest` 子命令**：`scripts/insentek_cli.py` 新增 `latest --sn SN`，统一走加密凭据 + 自动刷新 token，取代 SKILL.md 之前不可执行的 `curl /v3/device/{sn}/latest` 示例（Agent 无法从加密凭据中拿到明文 token）
+- **统一错误信封 `normalize_error`**：`cmd_data` / `get_latest` 现在把内部 `_validation_error` / `_http_error` / `authentication_required` 统一转换为 `{success: false, error: <kind>, message: ...}`，并对上游 WAF HTML 错误页截断到 500 字符
+
+Fixed
+-----
+
+- `docs/platform-setup.md` 中 OpenClaw 小节里两个同名的「方式二」标题（重命名为「方式三/四」）
+- README 项目结构里把 `skill.md` 修正为 `SKILL.md`（Linux 大小写敏感），删除已不存在的 `ref/` 和 `PLATFORM-TEST.md` 引用
+- `lib/commands/doctor.js` 移除与 skill 功能无关的 `git` 检测，避免最小化容器环境 doctor 报红
+- SKILL.md frontmatter 的 `api_base_url` 注明为信息字段（脚本实际通过 `INSENTEK_API_BASE` 环境变量切换 base URL）
+- `write_html.py` 调用示例从易丢换行/引号的 `echo | python ...` 改为推荐 `--input-file <tmpfile>` 模式
+
 [1.2.1] - 2026-05-26
 --------------------
 
