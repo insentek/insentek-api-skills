@@ -1,6 +1,55 @@
 Changelog
 =========
 
+[1.2.1] - 2026-05-26
+--------------------
+
+Added
+-----
+
+- **`@insentek/openapi-skill` CLI 凭据管理**
+  - `login` — 交互式配置 appid/secret，AES-256-GCM 加密保存至 `~/.config/insentek/credentials.json`
+  - `logout` — 清除本地凭据
+  - `auth status` — 查看连接状态（脱敏展示）
+  - 安装流程检测凭据，未配置时引导 `login`
+
+- **`scripts/credential_store.py`**
+  - 与 CLI 加密格式兼容，供 `insentek_cli.py` 读取本地凭据
+  - 修复 `AESGCM.decrypt()` 缺少 `associated_data=None` 导致解密失败的问题
+
+- **CLI `status` / `info --json` 脚本路径**
+  - JSON 输出新增 `scripts.cli`、`scripts.exportExcel`、`scripts.writeHtml`，便于 Agent 解析 `${SKILL_ROOT}`
+
+Changed
+-------
+
+- **认证安全模型（skill.md / docs）**
+  - Agent **禁止**在对话中索要或接收 appid/secret
+  - 401/403 / `authentication_required` 时展示固定引导文案，引导 `npx insentek-api-skill login`
+  - API 调用使用 `python ${SKILL_ROOT}/scripts/insentek_cli.py`；`${SKILL_ROOT}` 由 `status/info --json` 解析，**禁止**相对路径 `scripts/...`
+  - 文件找不到时先查安装路径，**禁止**乱试 `npx insentek-api-skill devices` 等错误命令
+
+- **OpenClaw workspace 安装路径**
+  - `workspace` scope 修正为 `~/.openclaw/workspace/skills/insentek-openapi`（Windows: `%USERPROFILE%\.openclaw\workspace\skills\...`）
+
+- **Windows 覆盖安装**
+  - `--force` 安装时在 Windows 上改为原地覆盖文件，避免 OpenClaw 占用目录导致 `rename` EPERM
+
+- **`insentek_cli.py`**
+  - 移除对话侧 `auth --appid/--secret` 写入能力；凭据仅通过 CLI `login` 配置
+  - `check` 增加 `credentials` 检查项
+
+- **文档**
+  - 更新 `docs/getting-started.md`、`docs/interaction.md`、`docs/platform-setup.md`、`examples/queries.md`
+  - CLI README 补充 scope 路径说明与凭据命令
+
+Fixed
+-----
+
+- OpenClaw workspace 目录解析错误（此前误用项目根目录下的 `skills/`）
+- Python 无法解密 Node CLI 写入的加密凭据
+- Agent 在 login 后误用 `npx insentek-api-skill devices`（非顶层命令）或相对路径脚本
+
 [1.1.0] - 2026-05-22
 --------------------
 
