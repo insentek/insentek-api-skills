@@ -19,7 +19,7 @@
 
 ### 1. 获取认证信息
 
-登录 [E 生态](https://www.ecois.info)，在「应用管理」中创建应用，获取 `appid` 和 `secret`。
+登录 [E 生态](https://cloud.ecois.info)，在「应用管理」中创建应用，获取 `appid` 和 `secret`。
 
 ### 2. 安装 Skill
 
