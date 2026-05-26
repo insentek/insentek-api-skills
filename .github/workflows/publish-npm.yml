@@ -1,0 +1,121 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/insentek-skill-cli
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync skill assets
+        run: npm run sync-assets
+
+      - name: Run tests
+        run: npm test
+
+      - name: Align package version with release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION=$(echo "$RELEASE_TAG" | sed 's/^v//')
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Notify DingTalk
+        if: always()
+        env:
+          DING_TOKEN: ${{ secrets.DINGTALK_ACCESS_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 <<'EOF'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          token = os.environ.get("DING_TOKEN", "")
+          if not token:
+              print("DINGTALK_ACCESS_TOKEN not set, skip notify")
+              sys.exit(0)
+
+          status = os.environ.get("JOB_STATUS", "unknown")
+          status_emoji = "🟢 成功" if status == "success" else "🔴 失败"
+          tag = os.environ.get("RELEASE_TAG", "")
+          version = tag.lstrip("v") if tag else "latest"
+          actor = os.environ.get("ACTOR", "")
+          run_url = os.environ.get("RUN_URL", "")
+          changelog = os.environ.get("RELEASE_BODY") or "_无更新日志_"
+
+          usage = ""
+          if status == "success":
+              usage = f"""
+          ---
+          **使用命令**
+
+          - 交互安装：`npx @insentek/openapi-skill@{version}`
+          - Claude Code：`npx @insentek/openapi-skill@{version} install -r claude -s global -y`
+          - OpenClaw：`npx @insentek/openapi-skill@{version} install -r openclaw -s workspace -y`
+          - 更新 skill：`npx @insentek/openapi-skill@{version} update -r claude -y`
+          - 查看状态：`npx @insentek/openapi-skill@{version} status`
+          - 环境诊断：`npx @insentek/openapi-skill@{version} doctor`"""
+
+          text = f"""### npm 发布结果通知：{status_emoji}
+          - **包名**: @insentek/openapi-skill
+          - **版本号**: {tag}
+          - **触发人**: {actor}
+          - **构建详情**: [点击查看 GitHub Action]({run_url})
+
+          ---
+          **更新日志**
+
+          {changelog}{usage}"""
+
+          body = {
+              "msgtype": "markdown",
+              "markdown": {
+                  "title": "npm 发布结果通知",
+                  "text": text,
+              },
+          }
+
+          webhook = f"https://oapi.dingtalk.com/robot/send?access_token={token}"
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  print(resp.read().decode("utf-8"))
+          except urllib.error.HTTPError as e:
+              print(f"DingTalk notify failed: {e.code} {e.reason}")
+              print(e.read().decode("utf-8"))
+              sys.exit(1)
+          EOF

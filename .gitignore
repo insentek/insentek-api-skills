@@ -25,3 +25,7 @@ Thumbs.db
 __pycache__/
 *.pyc
 *.pyo
+
+# npm CLI package
+packages/insentek-skill-cli/node_modules/
+packages/insentek-skill-cli/assets/

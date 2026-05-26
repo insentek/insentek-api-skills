@@ -23,14 +23,41 @@
 
 ### 2. 安装 Skill
 
-| 平台 | 安装方式 | 卸载 |
-|------|---------|------|
-| **OpenClaw** | `openclaw skills install insentek-api-skill` | `openclaw skills install insentek-api-skill` |
-| **Claude Code** | 项目根目录放 `skill.md` 或 `/load skill.md` | 删除文件或 `/clear` |
-| **ChatGPT** | GPTs Instructions 粘贴 / Actions Schema 导入 | Delete GPT / 删除 Action |
-| **Hermes-Agent** | `~/.hermes/skills/` 目录下放 skill 文件 | `rm` 文件后 `reload` |
+**一键安装（推荐）：**
 
-> 各平台分操作系统（Windows / macOS / Linux）的详细安装路径、ClawHub 安装命令、卸载步骤见 [`docs/platform-setup.md`](docs/platform-setup.md)。
+```bash
+npx @insentek/openapi-skill
+```
+
+| 类型 | 名称 |
+|------|------|
+| npm package | `@insentek/openapi-skill` |
+| skill id | `insentek-openapi` |
+| 安装目录 | `insentek-openapi` |
+
+CLI 会引导选择 **runtime**（OpenClaw / Claude Code），支持 **scope**（`global` / `project` / `workspace`），并动态解析本机安装路径。
+
+```bash
+npx @insentek/openapi-skill install -r claude -s global -y
+npx @insentek/openapi-skill update -r claude -y
+npx @insentek/openapi-skill doctor
+npx @insentek/openapi-skill info
+```
+
+OpenClaw 用户也可通过 ClawHub 单独安装（与本 CLI 无关）：
+
+```bash
+clawhub skill install insentek-api-skill
+```
+
+| 命令 | 说明 |
+|------|------|
+| `install` | 安装 skill |
+| `update` | 更新到当前包版本 |
+| `status` / `doctor` | 查看状态 / 诊断 |
+| `uninstall` | 卸载 |
+
+> CLI 源码见 [`packages/insentek-skill-cli/`](packages/insentek-skill-cli/)。路径因 runtime/scope/OS 而异，请用 `info` / `doctor` 查看本机实际位置。
 
 ### 3. 开始对话
 
