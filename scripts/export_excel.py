@@ -25,7 +25,7 @@ except ImportError:
     print("错误: 需要安装 openpyxl。请运行: pip install openpyxl", file=sys.stderr)
     sys.exit(1)
 
-API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "http://openapi.ecois.info")
+API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "https://openapi.ecois.info")
 MAX_RANGE_DAYS = 365
 MAX_HISTORY_YEARS = 3
 MAX_EXPORT_ROWS = 50000

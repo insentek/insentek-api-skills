@@ -61,9 +61,9 @@
 
 以获取设备列表接口为例:
 
-http://openapi.ecois.info/v3/devices?page=1&limit=20
+https://openapi.ecois.info/v3/devices?page=1&limit=20
 
-*   `http`为通信协议；
+*   `https`为通信协议；
     
 *   `openapi.ecois.info`是开放接口服务器域名
     
@@ -77,7 +77,7 @@ http://openapi.ecois.info/v3/devices?page=1&limit=20
 ```plaintext
 curl -H 'Content-Type: application/json' 
 -H 'Authorization: <Your AccessToken>' 
-'http://openapi.ecois.info/v3/devices?page=1&limit=100'
+'https://openapi.ecois.info/v3/devices?page=1&limit=100'
 ```
 
 **备注：如果是通过PostMan或cURL等工具发起请求，请记得添加请求头：**`Content-Type: application/json`
@@ -154,7 +154,7 @@ curl -H 'Content-Type: application/json'
 
 请求示例:
 
-`GET http://openapi.ecois.info/v3/token?appid=<YOUR APP ID>&secret=<YOUR APP SECRET`
+`GET https://openapi.ecois.info/v3/token?appid=<YOUR APP ID>&secret=<YOUR APP SECRET`
 
 `<YOUR APP ID>` 和`<YOUR APP SECRET>`替换为您实际从E生态获取到的接口凭据
 
@@ -209,7 +209,7 @@ curl -H 'Content-Type: application/json'
 
 请求示例 
 
-`GET http://openapi.ecois.info/v3/devices?page=1&limit=100`
+`GET https://openapi.ecois.info/v3/devices?page=1&limit=100`
 
 响应示例
 
@@ -286,7 +286,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/00000000000000
+请求示例 GET https://openapi.ecois.info/v3/device/00000000000000
 
 响应示例
 
@@ -355,7 +355,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/00000000000000/data?range=20180102,20181112&includeParameters=moisture,temperature&includeNodes=0,1,2,3,4
+请求示例 GET https://openapi.ecois.info/v3/device/00000000000000/data?range=20180102,20181112&includeParameters=moisture,temperature&includeNodes=0,1,2,3,4
 
 响应示例
 
@@ -419,7 +419,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/00000000000000/description
+请求示例 GET https://openapi.ecois.info/v3/device/00000000000000/description
 
 响应示例
 
@@ -474,7 +474,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/00000000000000/data/incremental
+请求示例 GET https://openapi.ecois.info/v3/device/00000000000000/data/incremental
 
 响应示例
 
@@ -533,7 +533,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/00000000000000/latest
+请求示例 GET https://openapi.ecois.info/v3/device/00000000000000/latest
 
 响应示例
 
@@ -588,7 +588,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/00000000000000/moment/2018-12-12%2009:32:22
+请求示例 GET https://openapi.ecois.info/v3/device/00000000000000/moment/2018-12-12%2009:32:22
 
 响应示例
 
@@ -649,7 +649,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/pluviometer/00000000000000/data/stats
+请求示例 GET https://openapi.ecois.info/v3/device/pluviometer/00000000000000/data/stats
 
 响应示例
 
@@ -706,7 +706,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/pluviometer/00000000000000/data/history
+请求示例 GET https://openapi.ecois.info/v3/device/pluviometer/00000000000000/data/history
 
 响应示例
 
@@ -785,7 +785,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例 GET http://openapi.ecois.info/v3/device/pluviometer/00000000000000/data/latest
+请求示例 GET https://openapi.ecois.info/v3/device/pluviometer/00000000000000/data/latest
 
 响应示例
 
@@ -855,7 +855,7 @@ curl -H 'Content-Type: application/json'
 
 ### 示例
 
-请求示例：POST [http://openapi.ecois.info/v3/device/{sn}/attr](http://openapi.ecois.info/v3/device/{sn}/attr)
+请求示例：POST [https://openapi.ecois.info/v3/device/{sn}/attr](https://openapi.ecois.info/v3/device/{sn}/attr)
 
 ```plaintext
 {
@@ -881,7 +881,7 @@ curl -H 'Content-Type: application/json'
 **访问地址：**
 
 ```plaintext
-POST http://openapi.ecois.info/v3/device/{sn}/transport
+POST https://openapi.ecois.info/v3/device/{sn}/transport
 ```
 
 参数说明：{sn} 为设备序列号

@@ -8,14 +8,14 @@ import { ensureDir, formatPath, pathExists } from '../utils.js';
 export const CONFIG_DIR = path.join(os.homedir(), '.config', 'insentek');
 export const CREDENTIALS_FILE = path.join(CONFIG_DIR, 'credentials.json');
 export const CREDENTIALS_VERSION = 2;
-export const API_BASE_URL = process.env.INSENTEK_API_BASE || 'http://openapi.ecois.info';
+export const API_BASE_URL = process.env.INSENTEK_API_BASE || 'https://openapi.ecois.info';
 export const SCRYPT_SALT = 'insentek-skill-salt-v1';
 
 export const NOT_CONNECTED_MESSAGE = `这台电脑还没有连接 Insentek API，需要先完成一次本地配置，通常 1 分钟就好。
 
 请在终端运行：
 
-npx insentek-api-skill login
+npx @insentek/openapi-skill login
 
 按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。`;
 
