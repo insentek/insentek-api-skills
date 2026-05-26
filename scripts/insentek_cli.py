@@ -12,10 +12,11 @@ Agent 通过调用此脚本执行所有操作，而非直接使用 curl。
     npx @insentek/openapi-skill auth status
 
 Usage:
-    python insentek_cli.py devices [--page 1] [--limit 20]
-    python insentek_cli.py device --sn SN
-    python insentek_cli.py data --sn SN --range START,END [--include-params moisture,temperature] [--dry-run]
-    python insentek_cli.py export --sn SN --range START,END --format csv --output file.csv [--dry-run]
+    python3 insentek_cli.py devices [--page 1] [--limit 20]
+    python3 insentek_cli.py device --sn SN
+    python3 insentek_cli.py data --sn SN --range START,END [--include-params moisture,temperature] [--dry-run]
+    python3 insentek_cli.py latest --sn SN
+    python3 insentek_cli.py export --sn SN --range START,END --format csv --output file.csv [--dry-run]
 """
 
 import argparse
@@ -223,6 +224,53 @@ def get_device(token, sn):
     detail = api_request(f"/v3/device/{sn}", headers={"Authorization": token})
     desc = api_request(f"/v3/device/{sn}/description", headers={"Authorization": token})
     print(json.dumps({"detail": detail, "description": desc}, ensure_ascii=False, indent=2))
+
+
+def normalize_error(result):
+    """
+    把 api_request 的内部错误标记转换为统一的 {"success": false, ...} 形式。
+    返回 dict 或 None（None 表示 result 没有错误）。
+    """
+    if not isinstance(result, dict):
+        return None
+    if result.get("error") == "authentication_required":
+        return {
+            "success": False,
+            "error": "authentication_required",
+            "message": result.get("message") or NOT_CONNECTED_MESSAGE,
+        }
+    if result.get("_validation_error"):
+        return {
+            "success": False,
+            "error": "validation_error",
+            "message": result.get("message") or "请求参数校验失败",
+        }
+    if result.get("_http_error"):
+        err = result.get("error") or {}
+        if isinstance(err, dict):
+            message = err.get("message") or err.get("error") or f"HTTP {result.get('status')}"
+        else:
+            message = str(err)
+        # 上游 WAF / 反代有时把 HTML 错误页直接返回；截断以避免上下文爆炸
+        if isinstance(message, str) and len(message) > 500:
+            message = message[:500] + "... [truncated]"
+        return {
+            "success": False,
+            "error": "http_error",
+            "status": result.get("status"),
+            "message": message,
+        }
+    return None
+
+
+def get_latest(token, sn):
+    """查询设备实时数据 /v3/device/{sn}/latest。"""
+    result = api_request(f"/v3/device/{sn}/latest", headers={"Authorization": token})
+    err = normalize_error(result)
+    if err is not None:
+        print(json.dumps(err, ensure_ascii=False, indent=2))
+        sys.exit(1)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def parse_range(range_str):
@@ -586,6 +634,10 @@ def cmd_data(args):
     if args.dry_run:
         dry_run_summary(result, args.sn, args.range)
         return
+    err = normalize_error(result)
+    if err is not None:
+        print(json.dumps(err, ensure_ascii=False, indent=2))
+        sys.exit(1)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -610,6 +662,11 @@ def main():
     dev_p = sub.add_parser("device", help="查询设备详情")
     dev_p.add_argument("--token", help="访问令牌（可选，如未提供则自动从配置获取）")
     dev_p.add_argument("--sn", required=True)
+
+    # latest
+    latest_p = sub.add_parser("latest", help="查询设备实时数据 /v3/device/{sn}/latest")
+    latest_p.add_argument("--token", help="访问令牌（可选，如未提供则自动从配置获取）")
+    latest_p.add_argument("--sn", required=True)
 
     # data
     data_p = sub.add_parser("data", help="查询设备历史数据（含边界检查）")
@@ -652,6 +709,9 @@ def main():
     elif args.command == "device":
         token = resolve_token(args.token)
         get_device(token, args.sn)
+    elif args.command == "latest":
+        token = resolve_token(args.token)
+        get_latest(token, args.sn)
     elif args.command == "data":
         args.func(args)
     elif args.command == "export":
