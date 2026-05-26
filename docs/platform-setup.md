@@ -52,7 +52,7 @@ npx @insentek/openapi-skill login
 clawhub skill install insentek-api-skill
 
 # 安装指定版本
-clawhub skill install insentek-api-skill@1.2.1
+clawhub skill install insentek-api-skill@1.2.2
 
 # 从 ClawHub 搜索确认
 clawhub skill search insentek

@@ -1,6 +1,6 @@
 ---
 name: insentek-openapi
-version: 1.2.1
+version: 1.2.2
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、

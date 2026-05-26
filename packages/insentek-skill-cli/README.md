@@ -128,7 +128,7 @@ insentek-api-skill doctor
 ```powershell
 npm run sync-assets
 npm pack
-npm install -g .\insentek-openapi-skill-1.2.1.tgz
+npm install -g .\insentek-openapi-skill-1.2.2.tgz
 insentek-api-skill info
 ```
 
