@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { buildScriptPaths } from './script-paths.js';
 import { CLI_NAME, PACKAGE_NAME, SKILL_ID } from './constants.js';
 import { findWorkspaceRoot } from './core/resolver.js';
 import { detectOS, getOSLabel } from './os.js';
@@ -81,6 +82,16 @@ export function serializeUninstallResult(item) {
   };
 }
 
+export function serializeInstallLocation(location) {
+  return {
+    scope: location.scope,
+    installDir: location.installDir,
+    strategy: location.strategy,
+    candidates: location.candidates,
+    scripts: buildScriptPaths(location.installDir),
+  };
+}
+
 export function serializeStatus(item) {
   return {
     runtimeId: item.runtimeId,
@@ -91,6 +102,7 @@ export function serializeStatus(item) {
     installDir: item.installDir,
     strategy: item.strategy,
     candidates: item.candidates,
+    scripts: buildScriptPaths(item.installDir),
   };
 }
 
@@ -116,12 +128,7 @@ export function buildInfoPayload(context = {}) {
       label: RUNTIMES[id].label,
       scopes: getScopesForRuntime(id).map((scope) => {
         const location = resolveInstallLocation(id, scope, context);
-        return {
-          scope,
-          installDir: location.installDir,
-          strategy: location.strategy,
-          candidates: location.candidates,
-        };
+        return serializeInstallLocation({ ...location, scope });
       }),
     })),
   };

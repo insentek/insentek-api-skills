@@ -4,6 +4,25 @@
 
 ---
 
+## 通用前置：CLI 安装与凭据配置（推荐）
+
+无论使用哪个 Agent 平台，都建议先完成 CLI 安装和本地凭据配置：
+
+```bash
+# 安装 skill 到 Claude Code / OpenClaw（交互式）
+npx @insentek/openapi-skill
+
+# 配置 API 凭据（加密本地保存，不要在对话中发送 secret）
+npx @insentek/openapi-skill login
+
+# 查看连接状态
+npx @insentek/openapi-skill auth status
+```
+
+凭据保存在 `~/.config/insentek/credentials.json`。Agent 通过 `scripts/insentek_cli.py` 自动读取，**不会**在对话中索要 appid/secret。
+
+---
+
 ## 目录
 
 - [OpenClaw](#openclaw)
@@ -19,7 +38,14 @@
 
 ### 安装
 
-#### 方式一：从 ClawHub 安装（推荐）
+#### 方式一：CLI 安装（推荐）
+
+```bash
+npx @insentek/openapi-skill install -r openclaw -s global -y
+npx @insentek/openapi-skill login
+```
+
+#### 方式二：从 ClawHub 安装
 
 ```bash
 # 安装最新版本
@@ -68,11 +94,17 @@ clawhub skill remove insentek-api-skill
 
 ### 首次使用
 
-```
-User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
+先在本机配置 API 凭据：
+
+```bash
+npx @insentek/openapi-skill login
 ```
 
-OpenClaw 会自动解析 skill.md 中的 function schema 并调用 authenticate 工具。
+然后在 OpenClaw 中直接查询：
+
+```
+User: 查看所有设备
+```
 
 ---
 
@@ -82,7 +114,14 @@ OpenClaw 会自动解析 skill.md 中的 function schema 并调用 authenticate 
 
 Claude Code 通过读取 skill 文件来加载技能上下文，支持项目级和全局级两种方式。
 
-#### 方式一：全局 Skills 目录（推荐）
+#### 方式一：CLI 安装（推荐）
+
+```bash
+npx @insentek/openapi-skill install -r claude -s global -y
+npx @insentek/openapi-skill login
+```
+
+#### 方式二：全局 Skills 目录（手动）
 
 Claude Code 会从全局 skills 目录自动加载所有 skill 文件，无需在每个项目中重复放置。
 
@@ -109,7 +148,7 @@ cp skill.md ~/.claude/skills/insentek-api-skill.md
 
 放置后重启 Claude Code 或重新打开对话即可生效。
 
-#### 方式二：项目目录加载
+#### 方式三：项目目录加载
 
 将 `skill.md` 放入当前工作项目的根目录，Claude Code 会自动识别为项目上下文：
 
@@ -118,7 +157,7 @@ cp skill.md ~/.claude/skills/insentek-api-skill.md
 cp skill.md ./skill.md
 ```
 
-#### 方式三：对话中直接引用
+#### 方式四：对话中直接引用
 
 ```
 # 在 Claude Code 对话中执行
@@ -142,11 +181,15 @@ cp skill.md ./skill.md
 
 ### 首次使用
 
-```
-User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
+```bash
+npx @insentek/openapi-skill login
 ```
 
-Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling 调用 API。
+```
+User: 查看所有设备
+```
+
+Claude Code 会读取 skill.md 中的 tool definitions，脚本自动使用本地凭据。
 
 ### 注意事项
 
@@ -173,8 +216,9 @@ Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling
 
 1. 创建 GPT 时，在 Configure 页面点击 **Add actions**
 2. 粘贴由 `skill.md` function schema 生成的 OpenAPI schema
-3. 设置认证方式：API Key（Header: `Authorization`）
-4. 保存后 GPT 可直接调用 insentek API
+3. 设置认证方式：API Key（Header: `Authorization`）— **不要将 appid/secret 写入 GPT 配置或对话**
+4. 在本机运行 `npx @insentek/openapi-skill login`，由脚本管理 token
+5. 保存后 GPT 可直接调用 insentek API
 
 #### 方式三：Custom Instructions（个人使用）
 
@@ -182,11 +226,9 @@ Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling
 
 1. 打开 ChatGPT → 点击头像 → **Custom Instructions**
 2. 在 "How would you like ChatGPT to respond?" 中粘贴 `skill.md` 的 Prompt 区内容
-3. 在 "What would you like ChatGPT to know about you?" 中填入：
-   ```
-   我有 insentek 物联网设备，appid: xxx, secret: yyy
-   ```
-4. 保存后开始新对话
+3. 在 "What would you like ChatGPT to know about you?" 中说明你有 insentek 物联网设备即可（**不要**写入 appid/secret）
+4. 在本机运行 `npx @insentek/openapi-skill login` 配置凭据
+5. 保存后开始新对话
 
 **限制：** Custom Instructions 不支持真正的 function calling，API 调用需要手动复制 URL。
 
@@ -202,7 +244,7 @@ Claude Code 会读取 skill.md 中的 tool definitions，使用 function calling
 User: 查看我的所有设备
 ```
 
-如果已配置 appid/secret，ChatGPT 会自动认证并查询。
+如果已在本地运行 `npx @insentek/openapi-skill login`，脚本会自动认证并查询。
 
 ---
 
@@ -262,11 +304,13 @@ export INSENTEK_BASE_URL=http://openapi.ecois.info
 
 ### 首次使用
 
-```
-User: appid xxx secret yyy，查看设备
+```bash
+npx @insentek/openapi-skill login
 ```
 
-Hermes-Agent 会解析 skill.md 中的工具定义并执行对应动作。
+```
+User: 查看设备
+```
 
 ---
 
@@ -280,6 +324,7 @@ Hermes-Agent 会解析 skill.md 中的工具定义并执行对应动作。
 | Alias Resolution | ✅ | ✅ | ✅ | ✅ |
 | Time Parsing | ✅ | ✅ | ✅ | ✅ |
 | Chain Calling | ✅ | ✅ | ✅ | ✅ |
+| CLI 凭据管理 | ✅ | ✅ | ⚠️ 需本机 login | ✅ |
 | ClawHub 一键安装 | ✅ | ❌ | ❌ | ❌ |
 
 **图例：** ✅ 原生支持 | ⚠️ 需额外配置 | ❌ 不支持
@@ -296,9 +341,10 @@ Hermes-Agent 会解析 skill.md 中的工具定义并执行对应动作。
 
 ### 认证失败
 
-1. 确认 appid 和 secret 正确（无多余空格）
-2. 检查网络是否能访问 `http://openapi.ecois.info`
-3. 确认 token 未过期（skill 会自动刷新，但首次需手动提供）
+1. 运行 `npx @insentek/openapi-skill auth status` 检查连接状态
+2. 重新配置：`npx @insentek/openapi-skill login`
+3. 检查网络是否能访问 `http://openapi.ecois.info`
+4. **不要在对话中发送 secret**，凭据仅通过 CLI 配置
 
 ### 查询无数据返回
 

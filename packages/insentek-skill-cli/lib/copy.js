@@ -55,6 +55,10 @@ async function cleanupSidecarDir(dirPath) {
   }
 }
 
+function isRenameLockError(error) {
+  return ['EPERM', 'EACCES', 'EBUSY', 'EXDEV'].includes(error?.code);
+}
+
 export async function replaceDirectoryAtomic(sourceRoot, targetDir) {
   const stagingDir = buildSidecarDir(targetDir, 'staging');
   let backupDir = null;
@@ -63,13 +67,31 @@ export async function replaceDirectoryAtomic(sourceRoot, targetDir) {
     await copyAssetsFromSource(sourceRoot, stagingDir);
 
     const hadExisting = await pathExists(targetDir);
-    if (hadExisting) {
-      backupDir = buildSidecarDir(targetDir, 'backup');
-      await fs.rename(targetDir, backupDir);
+    if (!hadExisting) {
+      await fs.rename(stagingDir, targetDir);
+      return;
     }
 
-    await fs.rename(stagingDir, targetDir);
-    await cleanupSidecarDir(backupDir);
+    // Windows often locks skill dirs (e.g. OpenClaw); in-place overwrite avoids EPERM on rename.
+    if (process.platform === 'win32') {
+      await copyAssetsFromSource(stagingDir, targetDir);
+      await cleanupSidecarDir(stagingDir);
+      return;
+    }
+
+    try {
+      backupDir = buildSidecarDir(targetDir, 'backup');
+      await fs.rename(targetDir, backupDir);
+      await fs.rename(stagingDir, targetDir);
+      await cleanupSidecarDir(backupDir);
+    } catch (renameError) {
+      if (!isRenameLockError(renameError)) {
+        throw renameError;
+      }
+      await copyAssetsFromSource(stagingDir, targetDir);
+      await cleanupSidecarDir(stagingDir);
+      await cleanupSidecarDir(backupDir);
+    }
   } catch (error) {
     await cleanupSidecarDir(stagingDir);
 

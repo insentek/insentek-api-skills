@@ -2,7 +2,11 @@ import { select, confirm } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { CLI_NAME, PACKAGE_NAME, SKILL_ID } from './constants.js';
+import { NOT_CONNECTED_MESSAGE } from './core/credentials.js';
+import { runAuthStatus } from './commands/auth.js';
 import { runDoctor } from './commands/doctor.js';
+import { ensureCredentialsForInstall, runLogin } from './commands/login.js';
+import { runLogout } from './commands/logout.js';
 import { getStatuses, uninstallSkills } from './commands/status.js';
 import { installSkills, updateSkills } from './core/installer.js';
 import {
@@ -132,8 +136,15 @@ function printInstallSummary(results) {
     console.log(`    skill: ${item.manifest.id} v${item.manifest.version}`);
     console.log(`    strategy: ${item.strategy}`);
   }
-  console.log('\nNext step: open your agent and say:');
-  console.log('  "我的 appid 是 xxx，secret 是 yyy，查看所有设备"\n');
+  console.log('\nNext step: open your agent and ask, for example:');
+  console.log('  "查看所有设备"\n');
+}
+
+function printInstallCredentialHint(connection) {
+  if (connection.connected) {
+    return;
+  }
+  console.log(`${NOT_CONNECTED_MESSAGE}\n`);
 }
 
 function printUpdateSummary(results) {
@@ -230,6 +241,11 @@ export async function runCli(argv) {
         finalOptions = await promptInstallOptions(defaults);
       }
 
+      const connection = await ensureCredentialsForInstall({
+        yes: defaults.yes,
+        silent: json,
+      });
+
       if (!json) {
         printInfo(`Installing ${SKILL_ID} v${pkg.version}...`);
       }
@@ -246,6 +262,7 @@ export async function runCli(argv) {
       }
 
       printInstallSummary(results);
+      printInstallCredentialHint(connection);
     });
 
   program
@@ -407,6 +424,60 @@ export async function runCli(argv) {
         console.log('');
       }
       console.log(`Quick start:\n  npx ${PACKAGE_NAME}\n`);
+    });
+
+  program
+    .command('login')
+    .description('Configure Insentek API credentials (encrypted local storage)')
+    .option('--appid <id>', 'App ID (non-interactive)')
+    .option('--secret <secret>', 'App Secret (non-interactive)')
+    .option('-y, --yes', 'Overwrite existing credentials without prompting', false)
+    .action(async (opts, command) => {
+      const json = getJsonFlag(command);
+      try {
+        const result = await runLogin({
+          yes: opts.yes,
+          appid: opts.appid,
+          secret: opts.secret,
+          json,
+        });
+        if (json) {
+          writeJson(result);
+        }
+      } catch (error) {
+        if (json) {
+          writeJson({ ok: false, command: 'login', error: error.message });
+        } else {
+          console.error(`Login failed: ${error.message}`);
+        }
+        process.exitCode = 1;
+      }
+    });
+
+  program
+    .command('logout')
+    .description('Remove saved Insentek API credentials')
+    .action(async (_opts, command) => {
+      const json = getJsonFlag(command);
+      const result = await runLogout({ json });
+      if (json) {
+        writeJson(result);
+      }
+    });
+
+  const auth = program
+    .command('auth')
+    .description('Manage Insentek API credentials');
+
+  auth
+    .command('status')
+    .description('Show credential connection status')
+    .action(async (_opts, command) => {
+      const json = getJsonFlag(command);
+      const result = await runAuthStatus({ json });
+      if (json) {
+        writeJson(result);
+      }
     });
 
   program

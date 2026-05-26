@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it } from 'node:test';
 import { SKILL_ID } from '../lib/constants.js';
 import { normalizeScope, validateScopeForRuntime } from '../lib/core/scope.js';
@@ -32,7 +34,9 @@ describe('resolveInstallLocation', () => {
 
   it('resolves openclaw workspace skills path', () => {
     const location = resolveInstallLocation('openclaw', 'workspace', { cwd: process.cwd() });
-    assert.match(location.installDir, /[\\/]skills[\\/]insentek-openapi$|insentek-openapi$/);
+    const expected = path.join(os.homedir(), '.openclaw', 'workspace', 'skills', SKILL_ID);
+    assert.equal(location.installDir, expected);
+    assert.equal(location.strategy, 'OpenClaw workspace skills directory (~/.openclaw/workspace/skills)');
   });
 });
 

@@ -5,6 +5,34 @@
 
 ---
 
+## 0. Authentication Behavior
+
+**MUST 遵守（与 `skill.md` Section 2 / 4 一致）：**
+
+- Agent **禁止**向用户索要或接收 `appid` / `secret`
+- 用户主动发送凭据时 → **拒绝接收**，引导 CLI `login`
+- 脚本返回 `authentication_required` 或 HTTP 401/403 → **STOP**，原样展示固定引导文案：
+
+```
+这台电脑还没有连接 Insentek API，需要先完成一次本地配置，通常 1 分钟就好。
+
+请在终端运行：
+
+npx insentek-api-skill login
+
+按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。
+```
+
+- 用户说"重新认证" → 引导 `npx @insentek/openapi-skill login` 或先 `logout` 再 `login`
+
+### 0.1 脚本路径（与 `skill.md` Section 2 一致）
+
+- API 调用用 `python ${SKILL_ROOT}/scripts/insentek_cli.py`，**禁止**相对路径 `scripts/...`
+- 首次调用前或 ENOENT：`npx @insentek/openapi-skill status -r openclaw -s workspace --json`，读 `installDir` / `scripts.cli`
+- 文件找不到时 **禁止**乱试 `npx insentek-api-skill devices` 等命令
+
+---
+
 ## 1. Intent Resolution
 
 ### 1.1 三层模型
@@ -136,7 +164,8 @@
 
 ```
 User: "3号设备上周的土壤湿度"
-  → check auth → authenticate if needed
+  → python scripts/insentek_cli.py check (optional) or direct query
+  → if authentication_required → STOP, show skill.md Section 2 fixed message
   → query_device(alias="3号") → resolve sn
   → query_data(sn, "上周") → /data
   → data points ≤ 200 → show table + trend
@@ -146,7 +175,7 @@ User: "3号设备上周的土壤湿度"
 
 ```
 User: "导出3号设备上个月数据为CSV"
-  → check auth → authenticate if needed
+  → if authentication_required → STOP, show skill.md Section 2 fixed message
   → query_device(alias="3号") → resolve sn
   → validate range (30d ≤ 365d) → OK
   → export_csv(sn, range, "data.csv") → return path
@@ -156,7 +185,7 @@ User: "导出3号设备上个月数据为CSV"
 
 ```
 User: "分析3号近三个月数据，生成报告"
-  → check auth → authenticate if needed
+  → if authentication_required → STOP, show skill.md Section 2 fixed message
   → query_device(alias="3号") → resolve sn
   → query_data(sn, "最近3个月")
      → 请求: 90天 / 实际: 13天 → coverage 14%

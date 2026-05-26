@@ -31,6 +31,9 @@ clawhub skill remove insentek-api-skill
 | Command | Description |
 |---------|-------------|
 | `install` | 安装 skill（默认命令，可交互选择 runtime） |
+| `login` | 配置 Insentek API 凭据（加密本地保存） |
+| `logout` | 清除已保存的凭据 |
+| `auth status` | 查看凭据连接状态 |
 | `update` | 更新已安装 skill 到当前包版本 |
 | `uninstall` | 卸载 |
 | `status` | 查看安装状态 |
@@ -54,7 +57,7 @@ clawhub skill remove insentek-api-skill
 | Claude Code | `global`（默认）, `project` |
 | OpenClaw | `global`, `project`, `workspace` |
 
-`workspace` 仅 OpenClaw 支持；Claude Code 没有 workspace 概念。
+`workspace` 仅 OpenClaw 支持；Claude Code 没有 workspace 概念。OpenClaw `workspace` 安装路径为 `~/.openclaw/workspace/skills`（Windows: `%USERPROFILE%\.openclaw\workspace\skills`）。
 
 ## Examples
 
@@ -68,9 +71,15 @@ npx @insentek/openapi-skill install -r claude -s global -y
 # 安装到 OpenClaw workspace
 npx @insentek/openapi-skill install -r openclaw -s workspace -y
 
-# 更新 / 诊断
+# 查安装路径与脚本位置（Agent 应用此解析 SKILL_ROOT）
+npx @insentek/openapi-skill status -r openclaw -s workspace --json
+
+# 凭据 / 诊断
 npx @insentek/openapi-skill update -r claude -y
 npx @insentek/openapi-skill doctor
+npx @insentek/openapi-skill login
+npx @insentek/openapi-skill logout
+npx @insentek/openapi-skill auth status
 npx @insentek/openapi-skill info
 
 # 脚本 / CI 使用 JSON 输出
@@ -119,7 +128,7 @@ insentek-api-skill doctor
 ```powershell
 npm run sync-assets
 npm pack
-npm install -g .\insentek-openapi-skill-1.2.0.tgz
+npm install -g .\insentek-openapi-skill-1.2.1.tgz
 insentek-api-skill info
 ```
 

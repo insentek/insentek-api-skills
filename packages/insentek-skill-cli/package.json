@@ -1,6 +1,6 @@
 {
   "name": "@insentek/openapi-skill",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Bootstrap insentek-openapi skill for OpenClaw and Claude Code",
   "keywords": [
     "insentek",

@@ -14,40 +14,54 @@
 
 ---
 
-## 第一步：获取认证信息
+## 第一步：在 E 生态获取 appid 和 secret
 
 1. 登录 [E 生态](https://www.ecois.info)
 2. 进入「应用管理」→「创建应用」
 3. 复制 `appid` 和 `secret`
-4. **妥善保存 secret，不要泄露给他人**
+4. **妥善保存 secret** — 后续仅在 CLI `login` 时输入，**不要**在 Agent 对话中发送
 
 ---
 
-## 第二步：选择平台并加载 Skill
+## 第二步：安装 Skill 并通过 CLI 配置凭据
 
-将 `skill.md` 文件内容加载到你使用的 Agent 平台：
+推荐使用 CLI 一键安装：
 
-| 平台 | 加载方式 | 详见 |
-|------|---------|------|
-| **OpenClaw** | 导入 skill 文件 | [platform-setup.md](platform-setup.md#openclaw) |
-| **Claude Code** | 放入项目目录或粘贴到对话 | [platform-setup.md](platform-setup.md#claude-code) |
-| **ChatGPT** | 粘贴到 Custom Instructions 或 GPTs 配置 | [platform-setup.md](platform-setup.md#chatgpt) |
-| **Hermes-Agent** | 导入技能包 | [platform-setup.md](platform-setup.md#hermes-agent) |
+```bash
+npx @insentek/openapi-skill
+```
+
+安装过程中若检测到尚未配置凭据，CLI 会引导你运行：
+
+```bash
+npx @insentek/openapi-skill login
+```
+
+在 `login` 提示中输入第一步获得的 appid 和 secret。凭据会加密保存在 `~/.config/insentek/credentials.json`（文件权限 600）。
+
+也可手动将 `skill.md` 加载到 Agent 平台，但仍需先完成 CLI `login`，详见 [platform-setup.md](platform-setup.md)。
 
 ---
 
 ## 第三步：开始对话
 
-首次对话时，提供你的 `appid` 和 `secret`：
+配置完成后，直接用自然语言查询：
 
-> **User:** 我的 appid 是 test，secret 是 test，帮我查看所有设备。
+> **User:** 帮我查看所有设备。
 
-Agent 会自动：
-1. 用 appid + secret 获取 token
-2. 查询你的设备列表
-3. 返回设备信息
+Agent 会自动读取本地凭据、查询设备列表并返回结果。
 
-后续对话无需重复提供认证信息（token 会在对话中自动缓存）。
+若未连接 API，Agent 会展示如下固定引导文案（见 `skill.md` Section 2）：
+
+```
+这台电脑还没有连接 Insentek API，需要先完成一次本地配置，通常 1 分钟就好。
+
+请在终端运行：
+
+npx insentek-api-skill login
+
+按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。
+```
 
 ---
 
@@ -117,7 +131,10 @@ Agent 会自动：
 ## 常见问题
 
 **Q: token 多久过期？**
-A: 默认 2 小时（7200 秒）。Agent 会在过期前 5 分钟自动刷新，无需你操作。
+A: 默认 2 小时（7200 秒）。脚本在 API 返回 401/403 时自动刷新 token，无需在对话中重新提供凭据。
+
+**Q: 可以在对话里告诉 Agent 我的 appid 和 secret 吗？**
+A: **不可以。** 凭据仅通过 `npx @insentek/openapi-skill login` 在本地配置，Agent 不会也不应接收这些敏感信息。
 
 **Q: 可以用设备别名查询吗？**
 A: 可以。Agent 支持别名部分匹配，如 "3号" 会匹配别名为 "3号大棚" 的设备。

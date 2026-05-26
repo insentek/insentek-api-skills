@@ -33,10 +33,9 @@ export const openclawRuntime = {
       strategy = 'OpenClaw global skills directory (first available location)';
     } else if (scope === 'workspace') {
       candidates = [
-        scopedSkills(scopeRoot, 'skills'),
-        scopedSkills(scopeRoot, '.openclaw', 'skills'),
+        homeSkills('.openclaw', 'workspace', 'skills'),
       ];
-      strategy = 'OpenClaw workspace skills directory';
+      strategy = 'OpenClaw workspace skills directory (~/.openclaw/workspace/skills)';
     } else {
       candidates = [
         scopedSkills(scopeRoot, 'skills'),

@@ -13,7 +13,8 @@
 
 | 脚本 | 功能 | 依赖 |
 |------|------|------|
-| `insentek_cli.py` | 统一 CLI：认证、设备查询、数据查询、CSV/JSON 导出 | Python 3.8+ |
+| `insentek_cli.py` | 统一 CLI：设备查询、数据查询、CSV/JSON 导出 | Python 3.8+ |
+| `credential_store.py` | 凭据加密读写（与 CLI login 兼容） | Python 3.8+, cryptography（读取加密凭据时） |
 | `write_html.py` | HTML 文件写入：将 AI 生成的 HTML 内容安全落盘 | Python 3.8+ |
 | `export_excel.py` | Excel 导出（多 sheet：原始数据 + 统计摘要） | Python 3.8+, openpyxl |
 
@@ -47,13 +48,20 @@ python insentek_cli.py check
 ```
 
 ### 认证
+
+凭据通过 CLI 本地配置，**不要在对话中提供 secret**：
+
 ```bash
-python insentek_cli.py auth --appid YOUR_APPID --secret YOUR_SECRET
+npx @insentek/openapi-skill login
+npx @insentek/openapi-skill logout
+npx @insentek/openapi-skill auth status
 ```
+
+脚本会自动从 `~/.config/insentek/credentials.json` 读取加密凭据，`--token` 参数可选。
 
 ### 查询设备列表
 ```bash
-python insentek_cli.py devices --token YOUR_TOKEN --page 1 --limit 20
+python insentek_cli.py devices --page 1 --limit 20
 ```
 
 ### 查询数据（含边界检查）

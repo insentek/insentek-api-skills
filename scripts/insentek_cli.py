@@ -6,19 +6,16 @@ Insentek OpenAPI Unified CLI
 封装所有 API 调用、认证管理、边界检查与数据导出能力。
 Agent 通过调用此脚本执行所有操作，而非直接使用 curl。
 
+凭据请通过 CLI 配置（不要在对话中提供 appid/secret）：
+    npx @insentek/openapi-skill login
+    npx @insentek/openapi-skill logout
+    npx @insentek/openapi-skill auth status
+
 Usage:
-    # 首次配置（仅需一次）
-    python insentek_cli.py auth --appid APPID --secret SECRET --save
-    
-    # 后续使用（无需 --token）
     python insentek_cli.py devices [--page 1] [--limit 20]
     python insentek_cli.py device --sn SN
     python insentek_cli.py data --sn SN --range START,END [--include-params moisture,temperature] [--dry-run]
     python insentek_cli.py export --sn SN --range START,END --format csv --output file.csv [--dry-run]
-    
-    # 管理凭据
-    python insentek_cli.py auth --status
-    python insentek_cli.py auth --clear
 """
 
 import argparse
@@ -26,7 +23,6 @@ import csv
 import json
 import os
 import platform
-import stat
 import subprocess
 import sys
 import urllib.error
@@ -35,11 +31,15 @@ import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "http://openapi.ecois.info")
-
-# 配置文件路径
-CONFIG_DIR = Path.home() / ".config" / "insentek"
-CREDENTIALS_FILE = CONFIG_DIR / "credentials.json"
+from credential_store import (
+    CREDENTIALS_FILE,
+    NOT_CONNECTED_MESSAGE,
+    clear_credentials,
+    load_credentials,
+    mask_secret,
+    mask_token,
+    update_token,
+)
 
 # 边界限制常量
 MAX_RANGE_DAYS = 365
@@ -47,6 +47,21 @@ MAX_HISTORY_YEARS = 3
 MAX_CHAT_ROWS = 200
 MAX_EXPORT_ROWS = 50000
 DRY_RUN_PREVIEW_ROWS = 5
+
+API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "http://openapi.ecois.info")
+
+AUTH_ERROR_CODES = {401, 403}
+
+
+def auth_error_response(status: int | None = None):
+    payload = {
+        "success": False,
+        "error": "authentication_required",
+        "message": NOT_CONNECTED_MESSAGE,
+    }
+    if status is not None:
+        payload["status"] = status
+    return payload
 
 
 def api_request(path, headers=None, params=None, method="GET", data=None, retry_auth=True, _refreshed=False):
@@ -72,13 +87,15 @@ def api_request(path, headers=None, params=None, method="GET", data=None, retry_
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         # 认证失败，尝试刷新 token 后重试一次
-        if retry_auth and e.code in (401, 403) and not _refreshed:
+        if retry_auth and e.code in AUTH_ERROR_CODES and not _refreshed:
             new_token = refresh_token()
             if new_token:
                 # 替换 header 中的 token 并重试
                 if headers and "Authorization" in headers:
                     headers["Authorization"] = new_token
                 return api_request(path, headers=headers, params=params, method=method, data=data, retry_auth=False, _refreshed=True)
+        if e.code in AUTH_ERROR_CODES:
+            return auth_error_response(e.code)
         body = e.read().decode("utf-8")
         try:
             err = json.loads(body)
@@ -89,69 +106,15 @@ def api_request(path, headers=None, params=None, method="GET", data=None, retry_
         return {"_http_error": True, "status": 0, "error": {"message": str(e)}}
 
 
-def load_credentials():
-    """从配置文件读取凭据和 token。"""
-    if not CREDENTIALS_FILE.exists():
-        return None
-    try:
-        with open(CREDENTIALS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return None
-
-
-def save_credentials(appid, secret, token=None):
-    """保存凭据和 token 到配置文件，权限设置为 600。"""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    data = {
-        "appid": appid,
-        "secret": secret,
-        "created_at": datetime.now(datetime.now().astimezone().tzinfo).isoformat()
-    }
-    if token:
-        data["token"] = token
-        data["token_updated_at"] = datetime.now(datetime.now().astimezone().tzinfo).isoformat()
-    with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    # 设置文件权限为 600（仅所有者可读写）
-    os.chmod(CREDENTIALS_FILE, stat.S_IRUSR | stat.S_IWUSR)
-    return data
-
-
-def update_token(token):
-    """更新配置文件中的 token，保留其他字段。"""
-    creds = load_credentials()
-    if not creds:
-        return None
-    creds["token"] = token
-    creds["token_updated_at"] = datetime.now(datetime.now().astimezone().tzinfo).isoformat()
-    with open(CREDENTIALS_FILE, "w", encoding="utf-8") as f:
-        json.dump(creds, f, ensure_ascii=False, indent=2)
-    os.chmod(CREDENTIALS_FILE, stat.S_IRUSR | stat.S_IWUSR)
-    return creds
-
-
-def clear_credentials():
-    """清除保存的凭据。"""
-    if CREDENTIALS_FILE.exists():
-        CREDENTIALS_FILE.unlink()
-        return True
-    return False
-
-
 def get_credentials(appid=None, secret=None):
     """
     获取凭据。
-    优先级：1. 命令行参数 2. 配置文件
+    仅允许从本地加密配置文件读取；不接受对话传入的 appid/secret。
     """
-    if appid and secret:
-        return {"appid": appid, "secret": secret}
-    
-    creds = load_credentials()
-    if creds:
-        return creds
-    
-    return None
+    if appid or secret:
+        return None
+
+    return load_credentials()
 
 
 def fetch_token(appid=None, secret=None):
@@ -161,11 +124,13 @@ def fetch_token(appid=None, secret=None):
     """
     creds = get_credentials(appid, secret)
     if not creds:
-        return None, "未配置凭据。请先运行: python insentek_cli.py auth --appid xxx --secret SECRET --save"
-    
+        return None, NOT_CONNECTED_MESSAGE
+
     result = api_request("/v3/token", params={"appid": creds["appid"], "secret": creds["secret"]}, retry_auth=False)
+    if result.get("error") == "authentication_required":
+        return None, NOT_CONNECTED_MESSAGE
     if result.get("_http_error"):
-        return None, f"认证失败: {result.get('error', {}).get('message', '未知错误')}"
+        return None, NOT_CONNECTED_MESSAGE
     
     return result.get("token"), None
 
@@ -192,9 +157,7 @@ def get_token(appid=None, secret=None):
     """
     creds = get_credentials(appid, secret)
     if not creds:
-        return None, "未配置凭据。请先运行: python insentek_cli.py auth --appid xxx --secret SECRET --save"
-    
-    # 如果配置文件中有 token，优先使用
+        return None, NOT_CONNECTED_MESSAGE
     cached_token = creds.get("token")
     if cached_token:
         return cached_token, None
@@ -209,65 +172,44 @@ def get_token(appid=None, secret=None):
     return token, None
 
 
-def authenticate(appid, secret, save=False, status=False, clear=False):
-    """处理认证相关操作。"""
+def authenticate(status=False, clear=False):
+    """查看或清除本地凭据。写入/更新凭据请使用 npx @insentek/openapi-skill login。"""
     if clear:
         if clear_credentials():
             print(json.dumps({"success": True, "message": "凭据已清除"}, ensure_ascii=False, indent=2))
         else:
             print(json.dumps({"success": False, "message": "没有已保存的凭据"}, ensure_ascii=False, indent=2))
         return
-    
+
     if status:
         creds = load_credentials()
         if creds:
-            # 不显示完整 secret，只显示前4位和后4位
-            secret_display = creds.get("secret", "")
-            if len(secret_display) > 8:
-                secret_display = secret_display[:4] + "****" + secret_display[-4:]
-            # 不显示完整 token，只显示前8位和后4位
-            token_display = creds.get("token", "")
-            if token_display:
-                if len(token_display) > 12:
-                    token_display = token_display[:8] + "****" + token_display[-4:]
-            else:
-                token_display = "(未缓存)"
             print(json.dumps({
                 "success": True,
+                "connected": True,
                 "appid": creds.get("appid"),
-                "secret": secret_display,
-                "token": token_display,
+                "secret": mask_secret(creds.get("secret")),
+                "token": mask_token(creds.get("token")),
                 "token_updated_at": creds.get("token_updated_at"),
                 "created_at": creds.get("created_at"),
+                "encrypted": creds.get("encrypted", False),
                 "config_path": str(CREDENTIALS_FILE)
             }, ensure_ascii=False, indent=2))
         else:
-            print(json.dumps({"success": False, "message": "未配置凭据"}, ensure_ascii=False, indent=2))
+            print(json.dumps({
+                "success": False,
+                "connected": False,
+                "message": NOT_CONNECTED_MESSAGE,
+                "config_path": str(CREDENTIALS_FILE)
+            }, ensure_ascii=False, indent=2))
         return
-    
-    # 获取 token 验证凭据有效性
-    result = api_request("/v3/token", params={"appid": appid, "secret": secret}, retry_auth=False)
-    if result.get("_http_error"):
-        print(json.dumps({"success": False, "error": result["error"]}, ensure_ascii=False, indent=2))
-        sys.exit(1)
-    
-    token = result.get("token")
-    expires = result.get("expires")
-    
-    output = {
-        "success": True,
-        "token": token,
-        "expires": expires,
-        "message": f"认证成功，token 有效期 {expires} 秒"
-    }
-    
-    if save:
-        save_credentials(appid, secret, token=token)
-        output["saved"] = True
-        output["config_path"] = str(CREDENTIALS_FILE)
-        output["message"] += f"，凭据和 token 已保存到 {CREDENTIALS_FILE}"
-    
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+
+    print(json.dumps({
+        "success": False,
+        "error": "use_cli_login",
+        "message": NOT_CONNECTED_MESSAGE
+    }, ensure_ascii=False, indent=2))
+    sys.exit(1)
 
 
 def list_devices(token, page=1, limit=20):
@@ -604,6 +546,16 @@ def check_environment(api_base=API_BASE_URL):
             "message": f"无法连接到 API 服务: {str(e)}"
         }
 
+    creds = load_credentials()
+    results["credentials"] = {
+        "ok": creds is not None,
+        "path": str(CREDENTIALS_FILE) if CREDENTIALS_FILE.exists() else None,
+        "message": (
+            f"Insentek API 已连接（appid: {creds.get('appid')}）"
+            if creds else NOT_CONNECTED_MESSAGE
+        ),
+    }
+
     # 汇总
     critical_ok = results["python"]["ok"] and results["scripts_cli"]["ok"]
     all_ok = all(r["ok"] for r in results.values())
@@ -643,10 +595,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
 
     # auth
-    auth_p = sub.add_parser("auth", help="获取 access token 或管理凭据")
-    auth_p.add_argument("--appid", help="E 生态应用 ID（首次配置需要）")
-    auth_p.add_argument("--secret", help="E 生态应用密钥（首次配置需要）")
-    auth_p.add_argument("--save", action="store_true", help="保存凭据到本地配置文件")
+    auth_p = sub.add_parser("auth", help="查看或清除本地凭据（配置请用 npx @insentek/openapi-skill login）")
     auth_p.add_argument("--status", action="store_true", help="查看当前保存的凭据状态")
     auth_p.add_argument("--clear", action="store_true", help="清除保存的凭据")
 
@@ -692,14 +641,10 @@ def main():
     if args.command == "check":
         check_environment(args.api_base)
     elif args.command == "auth":
-        if args.status or args.clear or (args.appid and args.secret):
-            authenticate(args.appid, args.secret, save=args.save, status=args.status, clear=args.clear)
+        if args.status or args.clear:
+            authenticate(status=args.status, clear=args.clear)
         else:
-            print(json.dumps({
-                "success": False,
-                "error": "请提供 --appid 和 --secret *** --status 查看状态，或 --clear 清除凭据"
-            }, ensure_ascii=False, indent=2))
-            sys.exit(1)
+            authenticate()
     elif args.command == "devices":
         token = resolve_token(args.token)
         list_devices(token, args.page, args.limit)
@@ -722,7 +667,11 @@ def resolve_token(token_arg):
         return token_arg
     token, error = get_token()
     if error:
-        print(json.dumps({"success": False, "error": error}, ensure_ascii=False, indent=2))
+        print(json.dumps({
+            "success": False,
+            "error": "authentication_required",
+            "message": error,
+        }, ensure_ascii=False, indent=2))
         sys.exit(1)
     return token
 

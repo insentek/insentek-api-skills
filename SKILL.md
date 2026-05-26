@@ -1,6 +1,6 @@
 ---
 name: insentek-openapi
-version: 1.2.0
+version: 1.2.1
 description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
@@ -39,28 +39,59 @@ guardrails:
 
 ## 2. Tools
 
-### authenticate
+**认证约束（MUST）：** Agent **禁止**向用户索要 `appid` 或 `secret`，也 **禁止**在对话中接收、存储或回显这些凭据。凭据仅通过 CLI 在本地配置：
 
-用户首次提供 appid/secret 时调用，或缓存凭据失效时。
-
-**方式一：持久化配置（推荐）**
 ```bash
-# 配置并保存（仅需一次）
-python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret} --save
-
-# 查看状态
-python scripts/insentek_cli.py auth --status
-
-# 清除配置
-python scripts/insentek_cli.py auth --clear
+npx @insentek/openapi-skill login       # 配置（加密保存）
+npx @insentek/openapi-skill logout      # 清除
+npx @insentek/openapi-skill auth status # 查看连接状态
 ```
 
-**方式二：临时获取 token**
+> npm 包名为 `@insentek/openapi-skill`，CLI 命令为 `insentek-api-skill`，两者等价。
+
+### 命令分工（MUST）
+
+| 用途 | 工具 | 示例 |
+|------|------|------|
+| 安装 / 更新 skill | `npx @insentek/openapi-skill` | `install -r openclaw -s workspace -y` |
+| 配置 / 清除凭据 | `npx insentek-api-skill login/logout/auth` | `npx insentek-api-skill login` |
+| 查安装路径 / 脚本位置 | `npx insentek-api-skill info/status/doctor --json` | 见下方「脚本路径解析」 |
+| **查询 API** | `python <SKILL_ROOT>/scripts/insentek_cli.py` | `python .../insentek_cli.py devices` |
+
+### 脚本路径解析（MUST，API 调用前）
+
+Agent 工作目录通常**不是** skill 安装目录。**禁止**使用相对路径 `python scripts/insentek_cli.py ...`。
+
+**首次 API 调用前**，或脚本路径未知 / 返回「文件找不到」时，**必须先**查实际安装位置：
+
 ```bash
-python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
+npx @insentek/openapi-skill status -r openclaw -s workspace --json
+# 或 info --json / doctor --json
 ```
 
-成功后输出 token。若使用 `--save`，凭据保存到 `~/.config/insentek/credentials.json`，后续所有命令无需再传 `--token`。
+从 JSON 读取 `results[].installDir` 作为 `${SKILL_ROOT}`，或直接使用 `results[].scripts.cli`。解析后在**本会话内缓存**，后续 API 调用复用，**不要**重复猜测路径。
+
+OpenClaw workspace 常见路径（仅供参考，**以 status/info 返回为准**）：
+`~/.openclaw/workspace/skills/insentek-openapi`
+
+**禁止（MUST NOT）：**
+- `python scripts/insentek_cli.py ...` — 相对路径在 OpenClaw 等环境下会失败
+- `npx insentek-api-skill devices` — `devices` 不是顶层命令，会误触发 `install`
+- 文件找不到时乱试其他命令 — **应重新 `status --json` 或 `info --json`**
+
+用户说「配置好了，继续吧」→ 从**中断前的意图**继续；若已有 `${SKILL_ROOT}` 直接调 API，**不要**重新 login。
+
+若工具返回 `authentication_required` 或 HTTP 401/403，**STOP** 并 **原样** 向用户展示以下固定文案（不得改写、不得追加索要 secret）：
+
+```
+这台电脑还没有连接 Insentek API，需要先完成一次本地配置，通常 1 分钟就好。
+
+请在终端运行：
+
+npx insentek-api-skill login
+
+按提示输入 appid 和 secret 即可（加密保存在本机，无需发到这个对话）。配置完成后回来继续提问，我接着帮你处理。
+```
 
 ---
 
@@ -78,10 +109,10 @@ python scripts/insentek_cli.py auth --appid ${appid} --secret ${secret}
 ```
 
 ```bash
-# 列表
-python scripts/insentek_cli.py devices [--token ${token}] --page ${page} --limit ${limit}
+# 列表（${SKILL_ROOT} 由 status/info 解析，见上方）
+python ${SKILL_ROOT}/scripts/insentek_cli.py devices [--page ${page}] [--limit ${limit}]
 # 详情
-python scripts/insentek_cli.py device [--token ${token}] --sn ${sn}
+python ${SKILL_ROOT}/scripts/insentek_cli.py device --sn ${sn}
 ```
 
 **注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
@@ -105,10 +136,10 @@ python scripts/insentek_cli.py device [--token ${token}] --sn ${sn}
 
 ```bash
 # 历史数据
-python scripts/insentek_cli.py data [--token ${token}] --sn ${sn} --range ${range} [--include-params ${params}]
+python ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} [--include-params ${params}]
 
 # 预览（调试/验证用）
-python scripts/insentek_cli.py data [--token ${token}] --sn ${sn} --range ${range} --dry-run
+python ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} --dry-run
 
 # 实时数据（latest）— 允许直接用 curl
  curl -s -H "Authorization: ${token}" "http://openapi.ecois.info/v3/device/${sn}/latest"
@@ -126,13 +157,13 @@ python scripts/insentek_cli.py data [--token ${token}] --sn ${sn} --range ${rang
 
 ```bash
 # CSV
-python scripts/insentek_cli.py export [--token ${token}] --sn ${sn} --range ${range} --format csv --output ${file}.csv
+python ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format csv --output ${file}.csv
 
 # Excel
-python scripts/export_excel.py [--token ${token}] --sn ${sn} --range ${range} --output ${file}.xlsx
+python ${SKILL_ROOT}/scripts/export_excel.py --sn ${sn} --range ${range} --output ${file}.xlsx
 
 # JSON
-python scripts/insentek_cli.py export [--token ${token}] --sn ${sn} --range ${range} --format json --output ${file}.json
+python ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format json --output ${file}.json
 ```
 
 **注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
@@ -146,7 +177,7 @@ python scripts/insentek_cli.py export [--token ${token}] --sn ${sn} --range ${ra
 Agent 完成数据分析后，将动态生成的 HTML 内容写入文件。
 
 ```bash
-echo "${html_content}" | python scripts/write_html.py --output ${file}.html
+echo "${html_content}" | python ${SKILL_ROOT}/scripts/write_html.py --output ${file}.html
 ```
 
 ---
@@ -196,39 +227,35 @@ Agent **禁止**将原始传感器全量数据输出到对话中。
 
 ## 4. Authentication
 
-### 4.1 持久化凭据（推荐）
+### 4.1 CLI 本地凭据（唯一方式）
 
-首次使用时配置凭据，后续自动读取：
-
-```bash
-# 配置并保存凭据（仅需执行一次）
-python scripts/insentek_cli.py auth --appid xxx --secret *** --save
-
-# 查看当前配置状态
-python scripts/insentek_cli.py auth --status
-
-# 清除配置
-python scripts/insentek_cli.py auth --clear
-```
-
-凭据存储在 `~/.config/insentek/credentials.json`，文件权限 600（仅所有者可读写）。
-
-### 4.2 命令行传参（临时/多账号场景）
+用户 **必须** 通过 CLI 在本地配置凭据，Agent **不得** 在对话中收集 appid/secret：
 
 ```bash
-python scripts/insentek_cli.py auth --appid xxx --secret ***
+npx @insentek/openapi-skill login
+npx @insentek/openapi-skill logout
+npx @insentek/openapi-skill auth status
 ```
 
-命令行参数优先级高于配置文件，便于临时覆盖或多账号切换。
+凭据加密保存在 `~/.config/insentek/credentials.json`（文件权限 600）。
+
+### 4.2 Agent 行为约束（MUST）
+
+| 场景 | Agent 行为 |
+|------|-----------|
+| 用户首次使用 / 未连接 | 展示 Section 2 固定引导文案，**禁止**索要 secret |
+| 用户主动发送 appid/secret | **拒绝接收**，说明请改用 CLI login |
+| 401/403 / `authentication_required` | 展示 Section 2 固定引导文案，STOP |
+| 用户要求"重新认证" | 引导 `npx @insentek/openapi-skill login`（更新）或 `logout` 后再 `login` |
 
 ### 4.3 Token 获取策略
 
 脚本**管理 token 生命周期**，实现缓存 + 自动刷新机制：
-- 首次 `auth --save` 时，凭据和 token 一并保存到配置文件
+- CLI `login` 验证凭据后，凭据和 token 一并加密保存
 - 后续各命令 `--token` 参数变为可选
 - 未提供 `--token` 时，脚本**优先从配置文件读取缓存的 token**
 - 请求 API 时如果返回 401/403，脚本**自动刷新 token** 并重试一次
-- 刷新后的 token 自动写回配置文件
+- 刷新失败则返回 `authentication_required`，Agent 引导用户重新 `login`
 - 不检查 token 过期时间，靠 HTTP 401/403 触发刷新
 
 ### 4.4 Token 缓存流程
@@ -238,14 +265,14 @@ python scripts/insentek_cli.py auth --appid xxx --secret ***
   ├── 使用缓存 token
   ├── 成功 → 返回数据
   └── 401/403 → 调用 /v3/token 获取新 token → 更新配置文件 → 重试请求
+        └── 仍失败 → 返回 authentication_required → 引导 CLI login
 ```
 
 ### 4.5 安全说明
 
-- Secret **绝不**输出到对话
-- 配置文件权限 600，仅所有者可读写
+- Secret **绝不**出现在对话、日志或 Agent 上下文中
+- 凭据文件权限 600，内容 AES-256-GCM 加密（机器绑定密钥）
 - Token 缓存有效期约 2 小时，靠 HTTP 401/403 触发自动刷新
-- `authenticate` 命令返回 token 供一次性使用，或让脚本自动管理
 
 ---
 
@@ -255,13 +282,15 @@ python scripts/insentek_cli.py auth --appid xxx --secret ***
 
 ## 5. Environment Check
 
-首次交互前执行：
+首次交互前，在解析 `${SKILL_ROOT}` 后执行：
 
 ```bash
-python scripts/insentek_cli.py check
+python ${SKILL_ROOT}/scripts/insentek_cli.py check
 ```
 
 关键项失败时 STOP，可选项失败时降级运行并告知用户。
+
+若 `checks.credentials.ok` 为 `false`，展示 Section 2 固定引导文案，**禁止**继续调用 API 或向用户索要 secret。
 
 ---
 
@@ -271,12 +300,13 @@ python scripts/insentek_cli.py check
 |------|------|
 | 200 | 正常处理 |
 | 400 | 检查参数格式后重试 |
-| 401/403 | 重新认证 |
+| 401/403 | **STOP**，展示 CLI login 引导文案，**禁止**向用户索要 secret |
+| 脚本找不到 / ENOENT | **STOP**，执行 `status --json` 或 `info --json` 解析 `${SKILL_ROOT}`，**禁止**乱试 npx 子命令 |
 | 404 | 确认设备 SN/别名 |
 | 429 | 限流，等待后重试 |
 | 500 | 指数退避重试 3 次 |
 
-脚本返回 `"success": false` 时，解析 `error` 字段：含"认证"则重认证，含"范围/限制"则解释护栏，否则展示友好错误。
+脚本返回 `"success": false` 且 `error` 为 `authentication_required` 时，展示 Section 2 固定引导文案并 STOP。其他错误解析 `error`/`message` 字段：含"范围/限制"则解释护栏，否则展示友好错误。
 
 ---
 
@@ -286,6 +316,6 @@ python scripts/insentek_cli.py check
 - **Values**: Nested `{node_name: {parameter_code: value}}`
 - **Alias**: Case-insensitive partial match on `alias`.
 - **Param names**: Use Chinese names from `/description` endpoint for display.
-- **Script-first**: Prefer `scripts/insentek_cli.py` over raw `curl`.
+- **Script-first**: API 用 `python ${SKILL_ROOT}/scripts/insentek_cli.py`；`${SKILL_ROOT}` 由 `status/info --json` 解析
 - **Dry-run**: Append `--dry-run` for preview; never output raw data to chat.
 - **Reference**: Edge cases → `reference/api-doc.md` (OpenAPI v3.1.9).

@@ -58,7 +58,7 @@ export function getScopeChoices(runtimeIds) {
   const labels = {
     global: 'global — user-level, available everywhere',
     project: 'project — current project directory',
-    workspace: 'workspace — detected workspace root (OpenClaw only)',
+    workspace: 'workspace — ~/.openclaw/workspace/skills (OpenClaw only)',
   };
 
   return allowed.map((scope) => ({

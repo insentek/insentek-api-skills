@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { ASSETS_DIR, SKILL_ID } from '../constants.js';
+import { ASSETS_DIR, PACKAGE_NAME, SKILL_ID } from '../constants.js';
+import { getCredentialStatus, hasCredentials } from '../core/credentials.js';
 import { readBundledManifest, validateManifest } from '../core/manifest.js';
 import { resolveInstallLocation, RUNTIMES } from '../runtime/index.js';
 import { getInstallStatus } from './status.js';
@@ -12,23 +13,7 @@ import {
   validateScopeForRuntime,
 } from '../core/scope.js';
 
-function findPythonCommand() {
-  const candidates = process.platform === 'win32'
-    ? ['python', 'py', 'python3']
-    : ['python3', 'python'];
-
-  for (const candidate of candidates) {
-    const result = spawnSync(candidate, ['--version'], {
-      encoding: 'utf8',
-      stdio: 'pipe',
-      shell: process.platform === 'win32',
-    });
-    if (result.status === 0) {
-      return { command: candidate, version: result.stdout.trim() || result.stderr.trim() };
-    }
-  }
-  return null;
-}
+import { findPythonCommand } from '../python.js';
 
 function checkLineEndings(content) {
   if (content.includes('\r\n')) {
@@ -130,6 +115,16 @@ export async function runDoctor({ runtimeIds, scope, context, silent = false }) 
     name: 'Python',
     ok: Boolean(python),
     message: python ? `${python.command}: ${python.version}` : 'Python 3.8+ not found in PATH',
+  });
+
+  const connected = await hasCredentials();
+  const credentialStatus = await getCredentialStatus();
+  checks.push({
+    name: 'Insentek API credentials',
+    ok: connected,
+    message: connected
+      ? `Connected as ${credentialStatus.appid} (${credentialStatus.encrypted ? 'encrypted' : 'legacy'})`
+      : `Not connected. Run: npx ${PACKAGE_NAME} login`,
   });
 
   const git = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['git'], { stdio: 'pipe', shell: process.platform === 'win32' });
