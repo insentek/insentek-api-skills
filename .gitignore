@@ -29,3 +29,5 @@ __pycache__/
 # npm CLI package
 packages/insentek-skill-cli/node_modules/
 packages/insentek-skill-cli/assets/
+.npmrc
+packages/insentek-skill-cli/.npmrc
