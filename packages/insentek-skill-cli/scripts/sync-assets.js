@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ASSET_ENTRIES } from '../lib/constants.js';
+import { copyDirectoryFiltered } from '../lib/copy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, '..');
@@ -37,7 +38,8 @@ async function copyFile(from, to) {
 }
 
 async function copyDir(from, to) {
-  await fs.cp(from, to, { recursive: true, force: true });
+  await fs.rm(to, { recursive: true, force: true });
+  await copyDirectoryFiltered(from, to);
   console.log(`  copied ${path.relative(repoRoot, from)}/`);
 }
 

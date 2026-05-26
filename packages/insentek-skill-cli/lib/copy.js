@@ -3,6 +3,20 @@ import path from 'node:path';
 import { ASSET_ENTRIES, ASSETS_DIR } from './constants.js';
 import { ensureDir, pathExists, removeDir } from './utils.js';
 
+const COPY_IGNORE_DIRS = new Set(['__pycache__']);
+
+function shouldCopyAssetEntry(name) {
+  return !COPY_IGNORE_DIRS.has(name);
+}
+
+export async function copyDirectoryFiltered(sourcePath, targetPath) {
+  await fs.cp(sourcePath, targetPath, {
+    recursive: true,
+    force: true,
+    filter: (src) => shouldCopyAssetEntry(path.basename(src)),
+  });
+}
+
 async function copyEntry(sourceRoot, entryName, targetRoot) {
   const sourcePath = path.join(sourceRoot, entryName);
   const targetPath = path.join(targetRoot, entryName);
@@ -13,7 +27,7 @@ async function copyEntry(sourceRoot, entryName, targetRoot) {
 
   const stat = await fs.stat(sourcePath);
   if (stat.isDirectory()) {
-    await fs.cp(sourcePath, targetPath, { recursive: true, force: true });
+    await copyDirectoryFiltered(sourcePath, targetPath);
   } else {
     await ensureDir(path.dirname(targetPath));
     await fs.copyFile(sourcePath, targetPath);
