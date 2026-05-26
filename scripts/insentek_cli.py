@@ -48,7 +48,7 @@ MAX_CHAT_ROWS = 200
 MAX_EXPORT_ROWS = 50000
 DRY_RUN_PREVIEW_ROWS = 5
 
-API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "http://openapi.ecois.info")
+API_BASE_URL = os.environ.get("INSENTEK_API_BASE", "https://openapi.ecois.info")
 
 AUTH_ERROR_CODES = {401, 403}
 

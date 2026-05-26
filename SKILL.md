@@ -5,7 +5,7 @@ description: >
   通过自然语言查询 insentek（东方智感）物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
   历史数据、趋势分析、跨设备对比与数据导出。
-api_base_url: http://openapi.ecois.info
+api_base_url: https://openapi.ecois.info
 author: insentek-api-skills
 guardrails:
   raw_data_output: PROHIBITED
@@ -13,6 +13,13 @@ guardrails:
   max_chat_rows: 200
   max_export_rows: 50000
 ---
+
+<!--
+  Note: `api_base_url` above is informational only; it is not consumed by
+  any script. To override at runtime, set the INSENTEK_API_BASE environment
+  variable before invoking scripts/insentek_cli.py.
+-->
+
 
 # Insentek OpenAPI Skill
 

@@ -94,7 +94,7 @@ clawhub skill remove insentek-api-skill
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
-| API Base URL | `http://openapi.ecois.info` | 默认即可 |
+| API Base URL | `https://openapi.ecois.info` | 默认即可 |
 
 ### 首次使用
 
@@ -303,7 +303,7 @@ hermes skill reload
 ### 配置环境变量（可选）
 
 ```bash
-export INSENTEK_BASE_URL=http://openapi.ecois.info
+export INSENTEK_API_BASE=https://openapi.ecois.info
 ```
 
 ### 首次使用
@@ -347,7 +347,7 @@ User: 查看设备
 
 1. 运行 `npx @insentek/openapi-skill auth status` 检查连接状态
 2. 重新配置：`npx @insentek/openapi-skill login`
-3. 检查网络是否能访问 `http://openapi.ecois.info`
+3. 检查网络是否能访问 `https://openapi.ecois.info`
 4. **不要在对话中发送 secret**，凭据仅通过 CLI 配置
 
 ### 查询无数据返回

@@ -187,7 +187,7 @@ Agent: 🔋 巡检报告 — 2号大棚 2.85V 🔴 过低
 
 ## API 参考
 
-- **Base URL**: `http://openapi.ecois.info`
+- **Base URL**: `https://openapi.ecois.info`（如需指向自建/测试环境，设置 `INSENTEK_API_BASE` 环境变量）
 - **认证**: `GET /v3/token?appid={appid}&secret={secret}`
 - **设备**: `/v3/devices`, `/v3/device/{sn}`, `/v3/device/{sn}/description`
 - **数据**: `/v3/device/{sn}/data`, `/latest`, `/moment/{datetime}`, `/incremental`
