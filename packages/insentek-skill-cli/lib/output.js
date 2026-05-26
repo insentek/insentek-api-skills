@@ -1,9 +1,12 @@
+import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { buildScriptPaths } from './script-paths.js';
 import { CLI_NAME, PACKAGE_NAME, SKILL_ID } from './constants.js';
 import { findWorkspaceRoot } from './core/resolver.js';
 import { detectOS, getOSLabel } from './os.js';
 import { getScopesForRuntime } from './core/scope.js';
+import { findPythonCommand } from './python.js';
 import {
   resolveInstallLocation,
   RUNTIME_IDS,
@@ -12,6 +15,37 @@ import {
 
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
+
+let cachedPython;
+
+function getPythonInfo() {
+  if (cachedPython !== undefined) {
+    return cachedPython;
+  }
+  const detected = findPythonCommand();
+  if (detected) {
+    cachedPython = {
+      ok: true,
+      command: detected.command,
+      version: detected.version,
+    };
+  } else {
+    cachedPython = {
+      ok: false,
+      command: process.platform === 'win32' ? 'python' : 'python3',
+      version: null,
+      hint: 'Python 3.10+ not detected in PATH; install python3 and retry.',
+    };
+  }
+  return cachedPython;
+}
+
+function isSkillInstalled(installDir) {
+  if (!installDir) {
+    return false;
+  }
+  return existsSync(path.join(installDir, 'SKILL.md'));
+}
 
 export class CliError extends Error {
   constructor(code, message) {
@@ -88,7 +122,9 @@ export function serializeInstallLocation(location) {
     installDir: location.installDir,
     strategy: location.strategy,
     candidates: location.candidates,
+    installed: isSkillInstalled(location.installDir),
     scripts: buildScriptPaths(location.installDir),
+    python: getPythonInfo(),
   };
 }
 
@@ -103,6 +139,7 @@ export function serializeStatus(item) {
     strategy: item.strategy,
     candidates: item.candidates,
     scripts: buildScriptPaths(item.installDir),
+    python: getPythonInfo(),
   };
 }
 
@@ -122,6 +159,7 @@ export function buildInfoPayload(context = {}) {
       os: getOSLabel(detectOS()),
       workspaceRoot,
       cwd,
+      python: getPythonInfo(),
     },
     runtimes: RUNTIME_IDS.map((id) => ({
       id,

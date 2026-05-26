@@ -458,11 +458,12 @@ def check_environment(api_base=API_BASE_URL):
 
     # 1. Python 版本
     py_version = sys.version_info
-    py_ok = py_version >= (3, 8)
+    py_ok = py_version >= (3, 10)
     results["python"] = {
         "ok": py_ok,
         "version": platform.python_version(),
-        "message": f"Python {platform.python_version()} {'满足要求 (>=3.8)' if py_ok else '版本过低，需要 >=3.8'}"
+        "executable": sys.executable,
+        "message": f"Python {platform.python_version()} {'满足要求 (>=3.10)' if py_ok else '版本过低，需要 >=3.10（脚本使用了 PEP 604 联合类型语法）'}"
     }
 
     # 2. 核心脚本存在性
@@ -570,7 +571,7 @@ def check_environment(api_base=API_BASE_URL):
             "message": (
                 "环境检查通过，所有功能可用。" if all_ok else
                 "核心环境满足要求，但部分可选功能不可用。" if critical_ok else
-                "核心环境未满足要求，请先安装 Python >=3.8 并确保脚本文件存在。"
+                "核心环境未满足要求，请先安装 Python >=3.10 并确保脚本文件存在。"
             )
         }
     }

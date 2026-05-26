@@ -24,6 +24,16 @@ describe('CLI --json output', () => {
     assert.equal(payload.command, 'info');
     assert.equal(payload.package.name, '@insentek/openapi-skill');
     assert.ok(Array.isArray(payload.runtimes));
+    assert.ok(payload.environment, 'environment must be present');
+    assert.ok(payload.environment.python, 'environment.python must be present');
+    assert.equal(typeof payload.environment.python.command, 'string');
+    assert.equal(typeof payload.environment.python.ok, 'boolean');
+
+    const firstScope = payload.runtimes[0]?.scopes?.[0];
+    assert.ok(firstScope, 'at least one runtime scope must be present');
+    assert.equal(typeof firstScope.installed, 'boolean', 'scope must expose installed flag');
+    assert.ok(firstScope.python, 'scope must expose python info');
+    assert.equal(typeof firstScope.python.command, 'string');
   });
 
   it('prints JSON for status --json', () => {
@@ -35,6 +45,8 @@ describe('CLI --json output', () => {
     assert.equal(payload.command, 'status');
     assert.ok(Array.isArray(payload.results));
     assert.equal(payload.results[0].runtimeId, 'claude');
+    assert.ok(payload.results[0].python, 'status entry must expose python info');
+    assert.equal(typeof payload.results[0].installed, 'boolean');
   });
 
   it('prints JSON error when --json install lacks --yes', () => {

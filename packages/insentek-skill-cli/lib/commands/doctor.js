@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { ASSETS_DIR, PACKAGE_NAME, SKILL_ID } from '../constants.js';
 import { getCredentialStatus, hasCredentials } from '../core/credentials.js';
 import { readBundledManifest, validateManifest } from '../core/manifest.js';
@@ -114,7 +113,9 @@ export async function runDoctor({ runtimeIds, scope, context, silent = false }) 
   checks.push({
     name: 'Python',
     ok: Boolean(python),
-    message: python ? `${python.command}: ${python.version}` : 'Python 3.8+ not found in PATH',
+    message: python
+      ? `${python.command}: ${python.version} (scripts require >=3.10)`
+      : 'Python 3.10+ not found in PATH. Install python3 from python.org / brew / your distro package manager.',
   });
 
   const connected = await hasCredentials();
@@ -125,13 +126,6 @@ export async function runDoctor({ runtimeIds, scope, context, silent = false }) 
     message: connected
       ? `Connected as ${credentialStatus.appid} (${credentialStatus.encrypted ? 'encrypted' : 'legacy'})`
       : `Not connected. Run: npx ${PACKAGE_NAME} login`,
-  });
-
-  const git = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['git'], { stdio: 'pipe', shell: process.platform === 'win32' });
-  checks.push({
-    name: 'Git',
-    ok: git.status === 0,
-    message: git.status === 0 ? 'git available' : 'git not found (optional)',
   });
 
   for (const runtimeId of runtimeIds) {

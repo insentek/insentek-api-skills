@@ -117,11 +117,13 @@ npx @insentek/openapi-skill login
 ```
 
 ```bash
-# 列表（${SKILL_ROOT} 由 status/info 解析，见上方）
-python ${SKILL_ROOT}/scripts/insentek_cli.py devices [--page ${page}] [--limit ${limit}]
+# 列表（${SKILL_ROOT} / ${PYTHON} 由 info --json 解析，见上方）
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py devices [--page ${page}] [--limit ${limit}]
 # 详情
-python ${SKILL_ROOT}/scripts/insentek_cli.py device --sn ${sn}
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py device --sn ${sn}
 ```
+
+> `${PYTHON}` 在 macOS/Linux 默认为 `python3`，Windows 默认为 `python`（亦可为 `py`）；以 `info --json` 输出的 `python.command` 为准。**禁止**使用裸 `python`——在 macOS 系统默认配置、新版 Ubuntu/Fedora 等环境下 `python` 命令不存在或指向 Python 2，会直接失败。
 
 **注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
 
@@ -144,13 +146,13 @@ python ${SKILL_ROOT}/scripts/insentek_cli.py device --sn ${sn}
 
 ```bash
 # 历史数据
-python ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} [--include-params ${params}]
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} [--include-params ${params}]
 
 # 预览（调试/验证用）
-python ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} --dry-run
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} --dry-run
 
-# 实时数据（latest）— 允许直接用 curl
- curl -s -H "Authorization: ${token}" "http://openapi.ecois.info/v3/device/${sn}/latest"
+# 实时数据（latest）
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py latest --sn ${sn}
 ```
 
 **注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
@@ -165,13 +167,13 @@ python ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range} --
 
 ```bash
 # CSV
-python ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format csv --output ${file}.csv
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format csv --output ${file}.csv
 
 # Excel
-python ${SKILL_ROOT}/scripts/export_excel.py --sn ${sn} --range ${range} --output ${file}.xlsx
+${PYTHON} ${SKILL_ROOT}/scripts/export_excel.py --sn ${sn} --range ${range} --output ${file}.xlsx
 
 # JSON
-python ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format json --output ${file}.json
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format json --output ${file}.json
 ```
 
 **注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
@@ -182,10 +184,16 @@ python ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} 
 
 ### write_html
 
-Agent 完成数据分析后，将动态生成的 HTML 内容写入文件。
+Agent 完成数据分析后，将动态生成的 HTML 内容写入文件。**推荐**使用 `--input-file` 避免 shell 转义吞掉换行 / 引号 / 反斜杠：
 
 ```bash
-echo "${html_content}" | python ${SKILL_ROOT}/scripts/write_html.py --output ${file}.html
+# 1. 先把 HTML 内容写到临时文件（写文件工具按平台决定）
+#    e.g. write to /tmp/report.html or %TEMP%\report.html
+# 2. 然后调用 write_html.py 落盘
+${PYTHON} ${SKILL_ROOT}/scripts/write_html.py --input-file ${tmp_html} --output ${file}.html
+
+# 也支持 stdin（注意 echo 会破坏 HTML 中的换行/引号，仅用于简单片段）：
+echo "${html_content}" | ${PYTHON} ${SKILL_ROOT}/scripts/write_html.py --output ${file}.html
 ```
 
 ---
@@ -290,13 +298,26 @@ npx @insentek/openapi-skill auth status
 
 ## 5. Environment Check
 
-首次交互前，在解析 `${SKILL_ROOT}` 后执行：
+首次交互前，在解析 `${SKILL_ROOT}` / `${PYTHON}` 后执行：
 
 ```bash
-python ${SKILL_ROOT}/scripts/insentek_cli.py check
+${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py check
 ```
 
 关键项失败时 STOP，可选项失败时降级运行并告知用户。
+
+若 `${PYTHON}` 解析失败（`info --json` 的 `python.ok` 为 `false`），说明本机没有可用的 Python 3.10+，**STOP** 并原样向用户展示：
+
+```
+当前电脑没有可用的 Python（需要 3.10 或更高版本）。请先安装 Python：
+
+- macOS: brew install python
+- Ubuntu/Debian: sudo apt install python3 python3-pip
+- Fedora: sudo dnf install python3
+- Windows: 到 https://www.python.org/downloads/ 下载安装包，安装时勾选 "Add Python to PATH"
+
+安装完成后请回来继续提问，我接着帮你处理。
+```
 
 若 `checks.credentials.ok` 为 `false`，展示 Section 2 固定引导文案，**禁止**继续调用 API 或向用户索要 secret。
 
@@ -324,6 +345,6 @@ python ${SKILL_ROOT}/scripts/insentek_cli.py check
 - **Values**: Nested `{node_name: {parameter_code: value}}`
 - **Alias**: Case-insensitive partial match on `alias`.
 - **Param names**: Use Chinese names from `/description` endpoint for display.
-- **Script-first**: API 用 `python ${SKILL_ROOT}/scripts/insentek_cli.py`；`${SKILL_ROOT}` 由 `status/info --json` 解析
+- **Script-first**: API 用 `${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py`；`${SKILL_ROOT}` 和 `${PYTHON}` 由 `info --json` 解析（`runtimes[].scopes[]` 中 `installed: true` 的条目对应 `installDir` / `scripts.cli` / `python.command`）
 - **Dry-run**: Append `--dry-run` for preview; never output raw data to chat.
 - **Reference**: Edge cases → `reference/api-doc.md` (OpenAPI v3.1.9).

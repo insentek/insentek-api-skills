@@ -134,4 +134,9 @@ insentek-api-skill info
 
 修改 `SKILL.md` / `scripts/` 后需重新 `npm run sync-assets` 再测。
 
-Requires Node.js 18+.
+## Requirements
+
+- Node.js 18+
+- Python 3.10+（用于运行 `scripts/insentek_cli.py` 等脚本；CLI 会通过 `findPythonCommand()` 在 macOS/Linux 上优先选择 `python3`，Windows 上优先 `python` / `py`）
+
+`info --json` 输出会在 `environment.python` 以及每个 `runtimes[].scopes[]` 条目下暴露 `python.command`，Agent 应以该值作为脚本调用前缀，而不是裸用 `python`。

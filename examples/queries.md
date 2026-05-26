@@ -15,14 +15,15 @@
 ### Agent Thinking
 1. 用户没有提供 sn 或 alias → 调用设备列表查询
 2. 无时间线索 → 不需要 query_data
-3. 若 `${SKILL_ROOT}` 未知 → `status --json` 解析安装路径
+3. 若 `${SKILL_ROOT}` / `${PYTHON}` 未知 → `info --json` 解析安装路径与 python 命令
 4. 脚本自动从本地凭据读取 token；若未连接则展示 login 引导文案
 
 ### Tool Calls
 ```
-status --json  →  installDir = ~/.openclaw/workspace/skills/insentek-openapi
+info --json  →  installDir = ~/.openclaw/workspace/skills/insentek-openapi
+            →  python.command = python3
 query_device(page=1, limit=20)
-  → python ${SKILL_ROOT}/scripts/insentek_cli.py devices --page 1 --limit 20
+  → ${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py devices --page 1 --limit 20
   → GET /v3/devices?page=1&limit=20
 ```
 

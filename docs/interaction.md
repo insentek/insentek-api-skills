@@ -164,7 +164,7 @@ npx @insentek/openapi-skill login
 
 ```
 User: "3号设备上周的土壤湿度"
-  → python scripts/insentek_cli.py check (optional) or direct query
+  → ${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py check (optional) or direct query
   → if authentication_required → STOP, show skill.md Section 2 fixed message
   → query_device(alias="3号") → resolve sn
   → query_data(sn, "上周") → /data
