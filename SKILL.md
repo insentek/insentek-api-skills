@@ -54,8 +54,6 @@ npx @insentek/openapi-skill logout      # 清除
 npx @insentek/openapi-skill auth status # 查看连接状态
 ```
 
-> npm 包名为 `@insentek/openapi-skill`（已发布到 npm registry）。`insentek-openapi` 是它的可执行别名，**仅在该包已被安装时**可用。**所有 `npx` 调用都应使用 scoped 包名** `@insentek/openapi-skill`，否则未安装的用户机器会得到 "npm ERR! 404"（registry 上不存在 `insentek-openapi`、也不存在已废弃的旧名 `insentek-api-skill`）。
-
 ### 命令分工（MUST）
 
 | 用途 | 工具 | 示例 |
@@ -90,7 +88,7 @@ OpenClaw workspace 常见路径（仅供参考，**以 info/status 返回为准*
 
 **禁止（MUST NOT）：**
 - `python3 scripts/insentek_cli.py ...` — 相对路径在 OpenClaw 等环境下会失败
-- `npx insentek-openapi ...` / `npx insentek-api-skill ...` — npm registry 上不存在这两个包名（前者是可执行别名、后者是已废弃旧名），对未安装本包的新用户会 404
+- `npx insentek-openapi ...` / `npx insentek-api-skill ...` — 未安装时 404
 - `npx @insentek/openapi-skill devices` — `devices` 不是顶层命令，会被 commander 当成 `install` 的子命令而触发安装流程
 - 文件找不到时乱试其它命令 — **应重新 `info --json`**
 
