@@ -1,4 +1,4 @@
-import { select, confirm } from '@inquirer/prompts';
+import { select, checkbox, confirm } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { Command } from 'commander';
 import { CLI_NAME, PACKAGE_NAME, SKILL_ID } from './constants.js';
@@ -8,7 +8,7 @@ import { runDoctor } from './commands/doctor.js';
 import { ensureCredentialsForInstall, runLogin } from './commands/login.js';
 import { runLogout } from './commands/logout.js';
 import { getStatuses, uninstallSkills } from './commands/status.js';
-import { installSkills, updateSkills } from './core/installer.js';
+import { findInstalledLocations, installSkills, updateSkills } from './core/installer.js';
 import {
   getScopeChoices,
   getScopeOptionHelp,
@@ -269,31 +269,78 @@ export async function runCli(argv) {
     .command('update')
     .description('Update installed skill to bundled version')
     .option('-r, --runtime <names>', `Runtime: ${runtimeHelp}`)
-    .option('-s, --scope <scope>', `Scope: ${scopeHelp}`, 'global')
-    .option('-y, --yes', 'Skip prompts (requires --runtime)', false)
+    .option('-s, --scope <scope>', `Scope: ${scopeHelp}`)
+    .option('-y, --yes', 'Skip prompts (auto-select all installed locations)', false)
     .action(async (opts, command) => {
       const json = getJsonFlag(command);
       assertNonInteractive(json, opts.yes, 'update');
 
-      const defaults = buildOptions(opts);
       const context = buildCommandContext();
-      const runtimeIds = await resolveRuntimeIdsFromOptions({
-        runtime: defaults.runtime,
-        yes: defaults.yes,
-        promptMessage: 'Select AI agent runtime to update',
-      });
-      validateScopeForRuntimes(runtimeIds, defaults.scope);
+      const scopeProvided = Boolean(opts.scope);
+      const runtimeProvided = Boolean(opts.runtime);
+      const scope = scopeProvided ? normalizeScope(opts.scope) : undefined;
+
+      // 显式指定 -r + -s：精确单点更新（兼容旧行为，未装也按 force 创建）
+      if (runtimeProvided && scopeProvided) {
+        const runtimeIds = resolveRuntimeIds(opts.runtime);
+        validateScopeForRuntimes(runtimeIds, scope);
+        if (!json) {
+          printInfo(`Updating ${SKILL_ID}...`);
+        }
+        const results = await updateSkills({
+          targets: runtimeIds.map((runtimeId) => ({ runtimeId, scope })),
+          context,
+          silent: json,
+        });
+        if (json) {
+          writeJson({ ok: true, command: 'update', results: results.map(serializeUpdateResult) });
+          return;
+        }
+        printUpdateSummary(results);
+        return;
+      }
+
+      const runtimeIds = runtimeProvided ? resolveRuntimeIds(opts.runtime) : RUNTIME_IDS;
+      const candidates = findInstalledLocations({ runtimeIds, scope, context });
+
+      if (candidates.length === 0) {
+        const hint = `No installed ${SKILL_ID} skill detected. Run \`npx ${PACKAGE_NAME}\` to install first.`;
+        if (json) {
+          writeJson({ ok: false, command: 'update', error: { code: 'NOT_INSTALLED', message: hint }, results: [] });
+        } else {
+          printInfo(hint);
+        }
+        process.exitCode = 1;
+        return;
+      }
+
+      let selected;
+      if (opts.yes || json || candidates.length === 1) {
+        selected = candidates;
+        if (!json && candidates.length === 1) {
+          printInfo(`Detected 1 installation: ${candidates[0].label} [${candidates[0].scope}] → ${formatPath(candidates[0].installDir)}`);
+        }
+        if (!json && opts.yes && candidates.length > 1) {
+          printInfo(`Detected ${candidates.length} installations, updating all (--yes).`);
+        }
+      } else {
+        const picks = await checkbox({
+          message: `Detected ${candidates.length} installed location(s). Select which to update (press <a> to toggle all):`,
+          choices: candidates.map((target, idx) => ({
+            name: `${target.label} [${target.scope}]  →  ${formatPath(target.installDir)}`,
+            value: idx,
+            checked: true,
+          })),
+          required: true,
+        });
+        selected = picks.map((idx) => candidates[idx]);
+      }
 
       if (!json) {
         printInfo(`Updating ${SKILL_ID}...`);
       }
 
-      const results = await updateSkills({
-        runtimeIds,
-        scope: defaults.scope,
-        context,
-        silent: json,
-      });
+      const results = await updateSkills({ targets: selected, context, silent: json });
 
       if (json) {
         writeJson({

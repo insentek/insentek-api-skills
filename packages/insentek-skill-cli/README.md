@@ -35,7 +35,7 @@ openclaw skills remove insentek-openapi
 | `login` | 配置 Insentek API 凭据（加密本地保存） |
 | `logout` | 清除已保存的凭据 |
 | `auth status` | 查看凭据连接状态 |
-| `update` | 更新已安装 skill 到当前包版本 |
+| `update` | 更新已安装 skill 到当前包版本（默认扫描全部 runtime × scope，多个匹配时交互多选；`-y` 自动全选） |
 | `uninstall` | 卸载 |
 | `status` | 查看安装状态 |
 | `doctor` | 诊断路径、manifest、脚本与环境 |
@@ -75,8 +75,14 @@ npx @insentek/openapi-skill install -r openclaw -s workspace -y
 # 查安装路径与脚本位置（Agent 应用此解析 SKILL_ROOT）
 npx @insentek/openapi-skill status -r openclaw -s workspace --json
 
+# 更新 skill（默认扫描所有 runtime × scope，多个匹配时交互多选）
+npx @insentek/openapi-skill update
+# 非交互：自动全选所有已安装位置（含 OpenClaw workspace）
+npx @insentek/openapi-skill update -y
+# 精确单点更新（已装则覆盖，未装则按 force 创建）
+npx @insentek/openapi-skill update -r openclaw -s workspace -y
+
 # 凭据 / 诊断
-npx @insentek/openapi-skill update -r claude -y
 npx @insentek/openapi-skill doctor
 npx @insentek/openapi-skill login
 npx @insentek/openapi-skill logout

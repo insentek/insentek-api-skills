@@ -1,8 +1,10 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { copySkillAssets } from '../copy.js';
 import { resolveInstallLocation, RUNTIMES } from '../runtime/index.js';
 import { formatPath, printSuccess } from '../utils.js';
 import { readBundledManifest, readInstalledManifest } from './manifest.js';
-import { validateScopeForRuntime } from './scope.js';
+import { getScopesForRuntime, validateScopeForRuntime } from './scope.js';
 
 export async function installSkill({
   runtimeId,
@@ -46,10 +48,33 @@ export async function updateSkill(options) {
   };
 }
 
-export async function updateSkills({ runtimeIds, scope, context, silent = false }) {
+export async function updateSkills({ targets, context, silent = false }) {
   const results = [];
-  for (const runtimeId of runtimeIds) {
+  for (const { runtimeId, scope } of targets) {
     results.push(await updateSkill({ runtimeId, scope, context, silent }));
   }
   return results;
+}
+
+export function findInstalledLocations({ runtimeIds, scope, context = {} }) {
+  const targets = [];
+  for (const runtimeId of runtimeIds) {
+    const runtimeScopes = getScopesForRuntime(runtimeId);
+    const candidateScopes = scope ? [scope].filter((s) => runtimeScopes.includes(s)) : runtimeScopes;
+    for (const candidateScope of candidateScopes) {
+      const location = resolveInstallLocation(runtimeId, candidateScope, context);
+      const hit = [location.installDir, ...location.candidates].find((dir) => (
+        dir && existsSync(path.join(dir, 'SKILL.md'))
+      ));
+      if (hit) {
+        targets.push({
+          runtimeId,
+          scope: candidateScope,
+          installDir: hit,
+          label: RUNTIMES[runtimeId].label,
+        });
+      }
+    }
+  }
+  return targets;
 }

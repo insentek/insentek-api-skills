@@ -21,6 +21,19 @@ Changed
   - 涉及 `README.md`、`docs/platform-setup.md`、`packages/insentek-skill-cli/README.md`
   - 不变：`.github/workflows/publish.yml` 中的 `clawhub login` / `clawhub publish .` —— 这是 ClawHub 发布端 CLI，与用户端的 `openclaw skills install` 是两套工具
 
+Fixed
+-----
+
+- **`update` 命令不再漏掉 OpenClaw `workspace` scope**
+  - 此前 `--scope` 默认 `'global'`，导致 `npx @insentek/openapi-skill update` 只会更新 Claude/OpenClaw 的 global 位置，已装到 `~/.openclaw/workspace/skills/insentek-openapi` 的用户必须额外执行 `update -r openclaw -s workspace` 才能同步
+  - 现改为：未显式传 `-s/--scope` 时，扫描所有 runtime × scope 中**实际已安装**（含 `SKILL.md`）的位置
+    - 0 个 → 报错 `NOT_INSTALLED` 并引导先 `install`
+    - 1 个 → 直接更新并打印检测到的位置
+    - 多个 → 交互模式用 inquirer `checkbox` 多选（默认全选）；`-y` / `--json` 模式自动全选所有匹配
+  - 显式传 `-r <runtime> -s <scope>` 仍保留精确单点更新行为（已装则覆盖，未装按 force 创建），CI 用例不受影响
+  - 新增 `findInstalledLocations()` helper（`lib/core/installer.js`）；`updateSkills()` 签名由 `{ runtimeIds, scope }` 改为 `{ targets: [{runtimeId, scope}, ...] }`（内部 API）
+  - 测试新增 `update --json` 缺 `-y` 时返回 `NON_INTERACTIVE_REQUIRED` 的契约校验
+
 [1.2.2] - 2026-05-26
 --------------------
 

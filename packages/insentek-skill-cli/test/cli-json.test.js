@@ -67,4 +67,13 @@ describe('CLI --json output', () => {
     assert.ok(Array.isArray(payload.checks));
     assert.equal(typeof payload.allPassed, 'boolean');
   });
+
+  it('prints JSON error when --json update lacks --yes', () => {
+    const result = runCli(['update', '--json']);
+    assert.equal(result.status, 1);
+
+    const payload = JSON.parse(result.stderr.trim());
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.code, 'NON_INTERACTIVE_REQUIRED');
+  });
 });
