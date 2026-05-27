@@ -57,7 +57,7 @@ npx @insentek/openapi-skill info
 OpenClaw 用户也可通过 ClawHub 单独安装（与本 CLI 无关）：
 
 ```bash
-clawhub skill install insentek-api-skill
+openclaw skills install insentek-openapi
 ```
 
 | 命令 | 说明 |
@@ -71,14 +71,14 @@ clawhub skill install insentek-api-skill
 
 ### 命名约定
 
-仓库中涉及三套名字，用途不同，**不要混用**：
+仓库中涉及两类名字，用途不同，**不要混用**：
 
 | 维度 | 取值 | 用途 |
 |------|------|------|
-| Skill ID（`skill.json` / SKILL.md frontmatter） | `insentek-openapi` | 安装目录名、Agent 内部标识 |
-| ClawHub slug | `insentek-api-skill` | `clawhub skill install <slug>` 时使用 |
-| npm 包名 | `@insentek/openapi-skill` | **所有 `npx` 调用必须使用此名**（registry 上没有 `insentek-api-skill`） |
-| CLI 二进制名 | `insentek-api-skill` | 仅在 `@insentek/openapi-skill` 已安装时作为可执行别名 |
+| 统一标识（Skill ID / 安装目录 / ClawHub slug / CLI 二进制名） | `insentek-openapi` | `skill.json` 与 SKILL.md frontmatter、Agent 安装目录、`openclaw skills install <slug>`、`@insentek/openapi-skill` 安装后的可执行命令 |
+| npm 包名 | `@insentek/openapi-skill` | **所有 `npx` 调用必须使用此名**（npm registry 上没有 `insentek-openapi` 或 `insentek-api-skill` 包） |
+
+> 旧名 `insentek-api-skill` 已被废弃，仅在 npm 反例提示中保留以防 Agent 误用。
 
 ### 3. 开始对话
 
@@ -211,9 +211,9 @@ Agent: 🔋 巡检报告 — 2号大棚 2.85V 🔴 过低
 
 ## 版本
 
-- **当前版本**: v1.2.2
+- **当前版本**: v1.2.3
 - **API 版本**: insentek OpenAPI v3
-- **更新日期**: 2026-05-26（见 [`CHANGELOG.md`](CHANGELOG.md)）
+- **更新日期**: 2026-05-27（见 [`CHANGELOG.md`](CHANGELOG.md)）
 
 ---
 

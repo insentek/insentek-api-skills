@@ -1,6 +1,6 @@
 {
   "name": "@insentek/openapi-skill",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Bootstrap insentek-openapi skill for OpenClaw and Claude Code",
   "keywords": [
     "insentek",
@@ -24,7 +24,7 @@
   "author": "Insentek",
   "type": "module",
   "bin": {
-    "insentek-api-skill": "bin/insentek-api-skill.js"
+    "insentek-openapi": "bin/insentek-openapi.js"
   },
   "files": [
     "bin",

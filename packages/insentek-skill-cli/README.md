@@ -7,7 +7,8 @@ Bootstrap the **insentek-openapi** skill for **OpenClaw** and **Claude Code**.
 | npm package | `@insentek/openapi-skill` |
 | skill id | `insentek-openapi` |
 | 安装目录 | `insentek-openapi` |
-| CLI 命令 | `insentek-api-skill` |
+| CLI 命令 | `insentek-openapi` |
+| ClawHub slug | `insentek-openapi` |
 
 安装路径由 CLI **按 runtime + scope 动态解析**。用 `info` / `doctor` 查看本机实际路径。
 
@@ -22,8 +23,8 @@ npx @insentek/openapi-skill
 OpenClaw 用户也可通过 ClawHub 单独安装，与本 CLI 无关：
 
 ```bash
-clawhub skill install insentek-api-skill
-clawhub skill remove insentek-api-skill
+openclaw skills install insentek-openapi
+openclaw skills remove insentek-openapi
 ```
 
 ## Commands
@@ -102,9 +103,9 @@ npm test
 **方式一：直接跑（最简单）**
 
 ```powershell
-node bin/insentek-api-skill.js info
-node bin/insentek-api-skill.js
-node bin/insentek-api-skill.js install -r claude -s global -y
+node bin/insentek-openapi.js info
+node bin/insentek-openapi.js
+node bin/insentek-openapi.js install -r claude -s global -y
 ```
 
 **方式二：模拟 npx（在 CLI 目录下）**
@@ -120,7 +121,7 @@ npx . install -r claude -s global -y
 ```powershell
 npm link
 npx @insentek/openapi-skill info
-insentek-api-skill doctor
+insentek-openapi doctor
 ```
 
 **方式四：模拟正式发布**
@@ -128,8 +129,8 @@ insentek-api-skill doctor
 ```powershell
 npm run sync-assets
 npm pack
-npm install -g .\insentek-openapi-skill-1.2.2.tgz
-insentek-api-skill info
+npm install -g .\insentek-openapi-skill-1.2.3.tgz
+insentek-openapi info
 ```
 
 修改 `SKILL.md` / `scripts/` 后需重新 `npm run sync-assets` 再测。

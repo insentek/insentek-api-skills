@@ -1,6 +1,26 @@
 Changelog
 =========
 
+[1.2.3] - 2026-05-27
+--------------------
+
+Changed
+-------
+
+- **统一项目对外标识为 `insentek-openapi`**
+  - ClawHub slug、CLI 二进制名、各 Agent 平台手动安装的文件名全部由旧名 `insentek-api-skill` 统一为 `insentek-openapi`，与 SKILL ID / 实际安装目录保持一致
+  - CLI bin 文件 `packages/insentek-skill-cli/bin/insentek-api-skill.js` 重命名为 `insentek-openapi.js`，`package.json` 中 `bin` 字段、`lib/constants.js` 中 `CLI_NAME`、`package-lock.json` 同步更新
+  - `.github/workflows/publish.yml` 的 ClawHub `--slug` / `--name` 与钉钉通知文案改为 `insentek-openapi`
+  - `docs/platform-setup.md` 中 `~/.claude/skills/insentek-api-skill.md`、`~/.hermes/skills/insentek-api-skill.md` 等示例文件名全部更新为新名
+  - 根 `README.md` 与 `packages/insentek-skill-cli/README.md` 的命名约定表简化：只剩「统一标识」与「npm 包名」两类，避免再出现多套并行的命名误用
+  - SKILL.md / `docs/interaction.md` 的 MUST NOT 反例同步增补 `npx insentek-openapi ...`，明确所有 `npx` 必须使用 scoped 包名 `@insentek/openapi-skill`
+  - 保留不变：GitHub 仓库实体名 `insentek-api-skills`、已发布的 npm 包名 `@insentek/openapi-skill`、历史 CHANGELOG 条目（事实记录）
+
+- **修正 OpenClaw 客户端 skill 安装命令拼写**
+  - 文档中所有 `clawhub skill install/remove/search/add ...` 校正为 `openclaw skills install/remove/search/add ...`（OpenClaw 客户端的 skill 子命令是 `skills`，不是 `skill`，所属 CLI 是 `openclaw` 而非 `clawhub`）
+  - 涉及 `README.md`、`docs/platform-setup.md`、`packages/insentek-skill-cli/README.md`
+  - 不变：`.github/workflows/publish.yml` 中的 `clawhub login` / `clawhub publish .` —— 这是 ClawHub 发布端 CLI，与用户端的 `openclaw skills install` 是两套工具
+
 [1.2.2] - 2026-05-26
 --------------------
 

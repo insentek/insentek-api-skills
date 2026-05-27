@@ -29,7 +29,7 @@ npx @insentek/openapi-skill login
 
 - API 调用用 `${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py`，其中 `${PYTHON}` 来自 `info --json` 的 `python.command`（缺省 `python3`），**禁止**相对路径 `scripts/...`
 - 首次调用前或 ENOENT：`npx @insentek/openapi-skill info --json`，遍历 `runtimes[].scopes[]` 挑选 `installed: true` 的条目，读取 `installDir` / `scripts.cli` / `python.command`
-- npm registry 上不存在 `insentek-api-skill` 包，**禁止**使用 `npx insentek-api-skill ...`
+- npm registry 上不存在 `insentek-openapi` / 已废弃旧名 `insentek-api-skill` 包，**禁止**使用 `npx insentek-openapi ...` 或 `npx insentek-api-skill ...`，所有 `npx` 调用必须用 scoped 包名 `@insentek/openapi-skill`
 
 ---
 

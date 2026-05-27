@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Shared credential storage compatible with insentek-api-skill CLI."""
+"""Shared credential storage compatible with insentek-openapi CLI."""
 
 from __future__ import annotations
 

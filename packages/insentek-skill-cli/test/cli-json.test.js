@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const binPath = path.join(packageRoot, 'bin/insentek-api-skill.js');
+const binPath = path.join(packageRoot, 'bin/insentek-openapi.js');
 
 function runCli(args) {
   return spawnSync(process.execPath, [binPath, ...args], {
