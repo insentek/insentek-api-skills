@@ -82,8 +82,12 @@ openclaw skills install insentek-openapi
 
 ### 3. 开始对话
 
+凭据已经在第 1 步通过 `npx @insentek/openapi-skill login` 加密保存到本机，**不要**也**不需要**在对话里发送 `appid` / `secret`。直接用自然语言提问即可：
+
 ```
-User: 我的 appid 是 xxx，secret 是 yyy，查看所有设备
+User: 查看我的所有设备
+User: 1号大棚现在的土壤温度
+User: 导出 3 号设备最近 7 天数据为 CSV
 ```
 
 更多用法见 [`docs/getting-started.md`](docs/getting-started.md)。
@@ -211,9 +215,9 @@ Agent: 🔋 巡检报告 — 2号大棚 2.85V 🔴 过低
 
 ## 版本
 
-- **当前版本**: v1.2.3
+- **当前版本**: v1.2.4
 - **API 版本**: insentek OpenAPI v3
-- **更新日期**: 2026-05-27（见 [`CHANGELOG.md`](CHANGELOG.md)）
+- **更新日期**: 2026-05-28（见 [`CHANGELOG.md`](CHANGELOG.md)）
 
 ---
 

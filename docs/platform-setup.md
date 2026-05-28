@@ -52,7 +52,7 @@ npx @insentek/openapi-skill login
 openclaw skills install insentek-openapi
 
 # 安装指定版本
-openclaw skills install insentek-openapi@1.2.3
+openclaw skills install insentek-openapi@1.2.4
 
 # 从 ClawHub 搜索确认
 openclaw skills search insentek
