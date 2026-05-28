@@ -80,7 +80,8 @@ npx @insentek/openapi-skill info --json
 
 ```bash
 npx @insentek/openapi-skill status -r openclaw -s workspace --json
-# 或 -r claude -s global / -s project，按用户场景选择
+# 或按用户场景选择，比如：
+npx @insentek/openapi-skill status  -r claude -s global / -s project
 ```
 
 OpenClaw workspace 常见路径（仅供参考，**以 info/status 返回为准**）：
@@ -88,7 +89,6 @@ OpenClaw workspace 常见路径（仅供参考，**以 info/status 返回为准*
 
 **禁止（MUST NOT）：**
 - `python3 scripts/insentek_cli.py ...` — 相对路径在 OpenClaw 等环境下会失败
-- `npx insentek-openapi ...` / `npx insentek-api-skill ...` — 未安装时 404
 - `npx @insentek/openapi-skill devices` — `devices` 不是顶层命令，会被 commander 当成 `install` 的子命令而触发安装流程
 - 文件找不到时乱试其它命令 — **应重新 `info --json`**
 
@@ -130,8 +130,6 @@ ${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py device --sn ${sn}
 
 > `${PYTHON}` 在 macOS/Linux 默认为 `python3`，Windows 默认为 `python`（亦可为 `py`）；以 `info --json` 输出的 `python.command` 为准。**禁止**使用裸 `python`——在 macOS 系统默认配置、新版 Ubuntu/Fedora 等环境下 `python` 命令不存在或指向 Python 2，会直接失败。
 
-**注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
-
 **行为：** alias → 模糊匹配 → 多匹配时反问用户 → 单匹配时缓存 alias→sn 映射。
 
 ---
@@ -160,8 +158,6 @@ ${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py data --sn ${sn} --range ${range}
 ${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py latest --sn ${sn}
 ```
 
-**注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
-
 时间表达式解析见 `docs/interaction.md` Section 2。
 
 ---
@@ -180,8 +176,6 @@ ${PYTHON} ${SKILL_ROOT}/scripts/export_excel.py --sn ${sn} --range ${range} --ou
 # JSON
 ${PYTHON} ${SKILL_ROOT}/scripts/insentek_cli.py export --sn ${sn} --range ${range} --format json --output ${file}.json
 ```
-
-**注意：** `--token` 变为可选。若未提供且已配置持久化凭据，脚本自动获取。
 
 所有导出脚本均支持 `--dry-run`。
 
@@ -273,8 +267,6 @@ npx @insentek/openapi-skill auth status
 
 脚本**管理 token 生命周期**，实现缓存 + 自动刷新机制：
 - CLI `login` 验证凭据后，凭据和 token 一并加密保存
-- 后续各命令 `--token` 参数变为可选
-- 未提供 `--token` 时，脚本**优先从配置文件读取缓存的 token**
 - 请求 API 时如果返回 401/403，脚本**自动刷新 token** 并重试一次
 - 刷新失败则返回 `authentication_required`，Agent 引导用户重新 `login`
 - 不检查 token 过期时间，靠 HTTP 401/403 触发刷新
