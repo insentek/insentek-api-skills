@@ -2,7 +2,7 @@
 name: insentek-openapi
 version: 1.2.3
 description: >
-  通过自然语言查询 insentek（东方智感）物联网设备数据。
+  通过自然语言查询 东方智感 或 e生态 的物联网设备数据。
   支持土壤墒情仪、气象站、见厘液位计等多种设备类型的实时数据、
   历史数据、趋势分析、跨设备对比与数据导出。
 api_base_url: https://openapi.ecois.info
@@ -41,7 +41,7 @@ guardrails:
 | 对比设备 | 文件导出 | `query_device` (xN) → `query_data` (xN) → `export_excel` |
 
 **任何一层意图不明确时，MUST 向用户确认，不得假设。** 详见 `docs/interaction.md` Section 1。
-
+**不得编造和引导用户查询开放接口中不存在的数据**
 ---
 
 ## 2. Tools
